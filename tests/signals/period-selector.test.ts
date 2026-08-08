@@ -3,6 +3,7 @@ import type { Candle } from "@/lib/market/provider";
 import {
   selectHighestPeriodCandidate,
   selectRulesPeriod,
+  structuralScore,
   type PeriodCandidate,
 } from "@/lib/signals/period-selector";
 
@@ -33,6 +34,33 @@ function candidateFixture(): Candle[] {
 }
 
 describe("rules period selection", () => {
+  it("freezes the exact structural-v1 score for a hand-calculated fixture", () => {
+    const candles = Array.from({ length: 21 }, (_, index) =>
+      candle(index, 99, 101, 100, index === 14 ? 200 : 100),
+    );
+    const score = structuralScore(candles, 20, {
+      index: 14,
+      time: candles[14].time,
+      low: 99,
+      prominenceAtr: 1,
+      recoveryAtr: 1.5,
+      confirmedAt: 16,
+    });
+
+    expect(score).toEqual({
+      version: "structural-v1",
+      score: 0.5705,
+      components: {
+        prominence: 0.5,
+        recovery: 0.5,
+        recency: 0.97,
+        retests: 1 / 3,
+        relativeVolume: 1,
+        higherTimeframeAgreement: 0,
+      },
+    });
+  });
+
   it("creates periods only from independently confirmed anchors", () => {
     const candles = candidateFixture();
 
