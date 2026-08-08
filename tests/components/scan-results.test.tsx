@@ -1,12 +1,17 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
+import { readFileSync } from "node:fs";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ScanResults } from "@/components/scan-results";
 import type { ScanItemResult } from "@/lib/signals/scan-symbol";
+
+const stylesheet = document.createElement("style");
+stylesheet.textContent = readFileSync("app/globals.css", "utf8");
+document.head.append(stylesheet);
 
 const RESULTS: ScanItemResult[] = [
   {
@@ -44,11 +49,24 @@ const RESULTS: ScanItemResult[] = [
 describe("ScanResults", () => {
   afterEach(cleanup);
 
+  it("keeps the details action at least 44 CSS pixels tall", () => {
+    const targetRule = Array.from(stylesheet.sheet?.cssRules ?? []).find(
+      (rule): rule is CSSStyleRule =>
+        rule instanceof CSSStyleRule &&
+        rule.selectorText === ".details-button" &&
+        rule.style.minHeight.length > 0,
+    );
+
+    expect(targetRule).toBeDefined();
+    expect(Number.parseFloat(targetRule?.style.minHeight ?? "0")).toBeGreaterThanOrEqual(44);
+  });
+
   it("keeps BUY, NO_SIGNAL, and data failures visible in one results table", () => {
     render(<ScanResults results={RESULTS} />);
 
     const table = screen.getByRole("table", { name: "Scan results" });
     expect(table).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Scrollable scan results" })).toContainElement(table);
     expect(screen.getAllByRole("row")).toHaveLength(RESULTS.length + 1);
     expect(screen.getByText("₹1,400.05")).toBeInTheDocument();
     expect(screen.getByText("₹1,375.10")).toBeInTheDocument();

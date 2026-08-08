@@ -20,6 +20,11 @@ interface RequestError {
   detail: string;
 }
 
+interface ActiveRequest {
+  controller: AbortController;
+  id: number;
+}
+
 const TIMEFRAMES: Array<{ value: Timeframe; label: string }> = [
   { value: "5m", label: "5 minutes" },
   { value: "15m", label: "15 minutes" },
@@ -28,6 +33,126 @@ const TIMEFRAMES: Array<{ value: Timeframe; label: string }> = [
   { value: "1wk", label: "1 week" },
   { value: "1mo", label: "1 month" },
 ];
+
+const TIMEFRAME_VALUES = new Set<Timeframe>(TIMEFRAMES.map(({ value }) => value));
+const NON_BUY_STATUSES = new Set<ScanItemResult["status"]>([
+  "NO_SIGNAL",
+  "OK",
+  "INSUFFICIENT_HISTORY",
+  "SYMBOL_NOT_FOUND",
+  "PROVIDER_RATE_LIMITED",
+  "STALE_DATA",
+  "INVALID_CANDLES",
+  "PROVIDER_ERROR",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isRenderableTimestamp(value: unknown): value is number {
+  return isFiniteNumber(value) && !Number.isNaN(new Date(value).getTime());
+}
+
+function isUniverseInstrument(value: unknown): value is UniverseInstrument {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    typeof value.symbol === "string" &&
+    value.symbol.length > 0 &&
+    typeof value.yahooSymbol === "string" &&
+    value.yahooSymbol.length > 0 &&
+    isOptionalString(value.companyName) &&
+    isOptionalString(value.industry) &&
+    isOptionalString(value.series) &&
+    isOptionalString(value.isin)
+  );
+}
+
+function isUniverseParseResult(value: unknown): value is UniverseParseResult {
+  if (!isRecord(value) || !Array.isArray(value.instruments) || !Array.isArray(value.rejected)) {
+    return false;
+  }
+  return (
+    value.instruments.every(isUniverseInstrument) &&
+    value.rejected.every(
+      (rejected) =>
+        isRecord(rejected) &&
+        Number.isInteger(rejected.row) &&
+        (rejected.row as number) > 0 &&
+        isOptionalString(rejected.symbol) &&
+        typeof rejected.reason === "string",
+    ) &&
+    isNonNegativeInteger(value.duplicateCount) &&
+    isNonNegativeInteger(value.totalRows)
+  );
+}
+
+function isBuyRecommendation(value: unknown, symbol: string): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    value.recommendation === "BUY" &&
+    value.symbol === symbol &&
+    typeof value.yahooSymbol === "string" &&
+    TIMEFRAME_VALUES.has(value.timeframe as Timeframe) &&
+    isRenderableTimestamp(value.signalTime) &&
+    typeof value.autoPeriod === "number" &&
+    Number.isInteger(value.autoPeriod) &&
+    value.autoPeriod > 0 &&
+    value.probability === null &&
+    isFiniteNumber(value.entry) &&
+    isFiniteNumber(value.stop) &&
+    isFiniteNumber(value.target1) &&
+    isFiniteNumber(value.target2) &&
+    isFiniteNumber(value.currentLdc) &&
+    isFiniteNumber(value.previousLdc) &&
+    isRenderableTimestamp(value.anchorTime) &&
+    value.strategyVersion === "rules-v1" &&
+    isRenderableTimestamp(value.dataAsOf)
+  );
+}
+
+function isScanItemResult(value: unknown): value is ScanItemResult {
+  if (!isRecord(value) || typeof value.symbol !== "string" || typeof value.status !== "string") {
+    return false;
+  }
+  if (!isOptionalString(value.message)) {
+    return false;
+  }
+  if (value.status === "BUY") {
+    return isBuyRecommendation(value.recommendation, value.symbol);
+  }
+  return (
+    NON_BUY_STATUSES.has(value.status as ScanItemResult["status"]) &&
+    value.recommendation === undefined
+  );
+}
+
+function parseScanResults(value: unknown): ScanItemResult[] | undefined {
+  if (!isRecord(value) || !Array.isArray(value.results) || !value.results.every(isScanItemResult)) {
+    return undefined;
+  }
+  return value.results;
+}
+
+function isAbortError(value: unknown): boolean {
+  return value instanceof DOMException && value.name === "AbortError";
+}
 
 function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : pluralForm}`;
@@ -50,6 +175,8 @@ export function ScanForm() {
   const [results, setResults] = useState<ScanItemResult[]>([]);
   const [error, setError] = useState<RequestError>();
   const errorRef = useRef<HTMLDivElement>(null);
+  const activeRequestRef = useRef<ActiveRequest | undefined>(undefined);
+  const requestIdRef = useRef(0);
 
   const instruments = parseResult?.instruments ?? [];
   const isBusy = phase === "parsing" || phase === "scanning" || phase === "exporting";
@@ -60,7 +187,37 @@ export function ScanForm() {
     }
   }, [error]);
 
+  useEffect(
+    () => () => {
+      requestIdRef.current += 1;
+      activeRequestRef.current?.controller.abort();
+    },
+    [],
+  );
+
+  function beginRequest(): ActiveRequest {
+    activeRequestRef.current?.controller.abort();
+    const request = {
+      controller: new AbortController(),
+      id: requestIdRef.current + 1,
+    };
+    requestIdRef.current = request.id;
+    activeRequestRef.current = request;
+    return request;
+  }
+
+  function ownsRequest(request: ActiveRequest): boolean {
+    return requestIdRef.current === request.id && !request.controller.signal.aborted;
+  }
+
+  function cancelActiveRequest(): void {
+    requestIdRef.current += 1;
+    activeRequestRef.current?.controller.abort();
+    activeRequestRef.current = undefined;
+  }
+
   async function parseFile(file: File): Promise<void> {
+    const request = beginRequest();
     setFileName(file.name);
     setParseResult(undefined);
     setResults([]);
@@ -74,19 +231,29 @@ export function ScanForm() {
       const response = await fetch("/api/universe/parse", {
         method: "POST",
         body: formData,
+        signal: request.controller.signal,
       });
+      if (!ownsRequest(request)) {
+        return;
+      }
       if (!response.ok) {
         throw new Error(await readError(response, "The file could not be parsed."));
       }
 
-      const parsed = (await response.json()) as UniverseParseResult;
-      if (!Array.isArray(parsed.instruments) || !Array.isArray(parsed.rejected)) {
+      const parsed: unknown = await response.json();
+      if (!ownsRequest(request)) {
+        return;
+      }
+      if (!isUniverseParseResult(parsed)) {
         throw new Error("The server returned an invalid stock list summary.");
       }
 
       setParseResult(parsed);
       setPhase(parsed.instruments.length > 0 ? "ready" : "empty");
     } catch (cause) {
+      if (!ownsRequest(request) || isAbortError(cause)) {
+        return;
+      }
       setError({
         title: "We couldn't load that stock list.",
         detail: cause instanceof Error ? cause.message : "Try another CSV file.",
@@ -100,6 +267,7 @@ export function ScanForm() {
       return;
     }
 
+    const request = beginRequest();
     setError(undefined);
     setResults([]);
     setPhase("scanning");
@@ -109,18 +277,29 @@ export function ScanForm() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ instruments, timeframe }),
+        signal: request.controller.signal,
       });
+      if (!ownsRequest(request)) {
+        return;
+      }
       if (!response.ok) {
         throw new Error(await readError(response, "The scan could not be completed."));
       }
 
-      const body = (await response.json()) as { results?: unknown };
-      if (!Array.isArray(body.results)) {
+      const body: unknown = await response.json();
+      if (!ownsRequest(request)) {
+        return;
+      }
+      const parsedResults = parseScanResults(body);
+      if (!parsedResults) {
         throw new Error("The server returned invalid scan results.");
       }
-      setResults(body.results as ScanItemResult[]);
+      setResults(parsedResults);
       setPhase("complete");
     } catch (cause) {
+      if (!ownsRequest(request) || isAbortError(cause)) {
+        return;
+      }
       setError({
         title: "We couldn't complete this scan.",
         detail: cause instanceof Error ? cause.message : "Try the scan again.",
@@ -134,6 +313,7 @@ export function ScanForm() {
       return;
     }
 
+    const request = beginRequest();
     setError(undefined);
     setPhase("exporting");
 
@@ -142,19 +322,35 @@ export function ScanForm() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ results }),
+        signal: request.controller.signal,
       });
+      if (!ownsRequest(request)) {
+        return;
+      }
       if (!response.ok) {
         throw new Error(await readError(response, "The results could not be exported."));
       }
 
-      const blobUrl = URL.createObjectURL(await response.blob());
+      const blob = await response.blob();
+      if (!ownsRequest(request)) {
+        return;
+      }
+      const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
       link.download = "scan-results.csv";
-      link.click();
-      URL.revokeObjectURL(blobUrl);
+      document.body.append(link);
+      try {
+        link.click();
+      } finally {
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+      }
       setPhase("complete");
     } catch (cause) {
+      if (!ownsRequest(request) || isAbortError(cause)) {
+        return;
+      }
       setError({
         title: "We couldn't export these results.",
         detail: cause instanceof Error ? cause.message : "Try exporting again.",
@@ -166,7 +362,7 @@ export function ScanForm() {
   const buyCount = results.filter(({ status }) => status === "BUY").length;
 
   return (
-    <>
+    <div className="scan-workspace">
       <section className="scan-panel" aria-label="Scan setup">
         {error ? (
           <div className="error-summary" role="alert" ref={errorRef} tabIndex={-1}>
@@ -182,7 +378,6 @@ export function ScanForm() {
               id="stock-list"
               type="file"
               accept=".csv,text/csv"
-              disabled={isBusy}
               onChange={(event) => {
                 const file = event.currentTarget.files?.[0];
                 if (file) {
@@ -200,7 +395,13 @@ export function ScanForm() {
               id="timeframe"
               value={timeframe}
               disabled={isBusy}
-              onChange={(event) => setTimeframe(event.currentTarget.value as Timeframe)}
+              onChange={(event) => {
+                cancelActiveRequest();
+                setTimeframe(event.currentTarget.value as Timeframe);
+                setResults([]);
+                setError(undefined);
+                setPhase(instruments.length > 0 ? "ready" : "empty");
+              }}
             >
               {TIMEFRAMES.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -256,21 +457,6 @@ export function ScanForm() {
           ) : null}
         </div>
 
-        <fieldset className="mode-control">
-          <legend>Recommendation mode</legend>
-          <label>
-            <input type="radio" name="mode" defaultChecked />
-            Rules BUY
-          </label>
-          <label>
-            <input type="radio" name="mode" disabled aria-describedby="model-mode-explanation" />
-            Validated Model BUY
-          </label>
-          <p id="model-mode-explanation">
-            Validated Model BUY becomes available only after an out-of-sample model passes its
-            acceptance checks.
-          </p>
-        </fieldset>
       </section>
 
       <section className="results-area" aria-labelledby="results-heading">
@@ -287,7 +473,7 @@ export function ScanForm() {
         </div>
         {results.length > 0 ? (
           <ScanResults results={results} />
-        ) : (
+        ) : phase === "parsing" || phase === "scanning" ? null : (
           <p className="empty-state">
             {parseResult && instruments.length > 0
               ? `Ready to scan ${plural(instruments.length, "instrument")}.`
@@ -296,9 +482,25 @@ export function ScanForm() {
         )}
       </section>
 
+      <fieldset className="mode-control">
+        <legend>Recommendation mode</legend>
+        <label>
+          <input type="radio" name="mode" defaultChecked />
+          Rules BUY
+        </label>
+        <label>
+          <input type="radio" name="mode" disabled aria-describedby="model-mode-explanation" />
+          Validated Model BUY
+        </label>
+        <p id="model-mode-explanation">
+          Validated Model BUY becomes available only after an out-of-sample model passes its
+          acceptance checks.
+        </p>
+      </fieldset>
+
       <p className="disclaimer">
         Quantitative research output, not a guarantee or personalized investment advice.
       </p>
-    </>
+    </div>
   );
 }

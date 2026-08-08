@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -44,6 +44,16 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
+
 describe("ScanForm", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
@@ -51,8 +61,268 @@ describe("ScanForm", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("shows parsing progress without showing empty or ready copy", async () => {
+    const user = userEvent.setup();
+    const pendingParse = deferred<Response>();
+    vi.mocked(fetch).mockReturnValueOnce(pendingParse.promise);
+    render(<ScanForm />);
+
+    await user.upload(
+      screen.getByLabelText("Upload stock list"),
+      new File(["Symbol\nRELIANCE"], "stocks.csv", { type: "text/csv" }),
+    );
+
+    expect(screen.getByText("Checking the stock list…")).toBeInTheDocument();
+    expect(screen.queryByText("Upload a stock list to begin.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Ready to scan/)).not.toBeInTheDocument();
+  });
+
+  it("shows scanning progress without showing ready copy", async () => {
+    const user = userEvent.setup();
+    const pendingScan = deferred<Response>();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(FIRST_PARSE))
+      .mockReturnValueOnce(pendingScan.promise);
+    render(<ScanForm />);
+
+    await user.upload(
+      screen.getByLabelText("Upload stock list"),
+      new File(["Symbol\nRELIANCE\nTCS"], "stocks.csv", { type: "text/csv" }),
+    );
+    await screen.findByText("2 valid instruments");
+    await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
+
+    expect(screen.getByText("Scanning 2 instruments…")).toBeInTheDocument();
+    expect(screen.queryByText(/Ready to scan/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Upload a stock list to begin.")).not.toBeInTheDocument();
+  });
+
+  it("clears results and disables export when the timeframe changes", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(FIRST_PARSE))
+      .mockResolvedValueOnce(
+        jsonResponse({ results: [{ symbol: "TCS", status: "NO_SIGNAL" }] }),
+      );
+    render(<ScanForm />);
+
+    await user.upload(
+      screen.getByLabelText("Upload stock list"),
+      new File(["Symbol\nRELIANCE\nTCS"], "stocks.csv", { type: "text/csv" }),
+    );
+    await screen.findByText("2 valid instruments");
+    await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
+    await screen.findByRole("table", { name: "Scan results" });
+    expect(screen.getByText("Scan complete: 0 BUY signals across 1 result.")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Candle timeframe"), "1h");
+
+    expect(screen.queryByRole("table", { name: "Scan results" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Scan complete:/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export results" })).toBeDisabled();
+    expect(screen.getByText("Ready to scan 2 instruments.")).toBeInTheDocument();
+  });
+
+  it("lets a newer upload supersede an older parse response", async () => {
+    const user = userEvent.setup();
+    const oldParse = deferred<Response>();
+    vi.mocked(fetch)
+      .mockReturnValueOnce(oldParse.promise)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          instruments: [{ symbol: "INFY", yahooSymbol: "INFY.NS" }],
+          rejected: [],
+          duplicateCount: 0,
+          totalRows: 1,
+        }),
+      );
+    render(<ScanForm />);
+
+    const input = screen.getByLabelText("Upload stock list");
+    await user.upload(input, new File(["Symbol\nRELIANCE"], "older.csv", { type: "text/csv" }));
+    expect(input).toBeEnabled();
+    await user.upload(input, new File(["Symbol\nINFY"], "newer.csv", { type: "text/csv" }));
+    await screen.findByText("1 valid instrument");
+
+    await act(async () => oldParse.resolve(jsonResponse(FIRST_PARSE)));
+
+    expect(screen.getByText("newer.csv")).toBeInTheDocument();
+    expect(screen.getByText("1 valid instrument")).toBeInTheDocument();
+    expect(screen.queryByText("2 valid instruments")).not.toBeInTheDocument();
+  });
+
+  it("lets a replacement upload supersede an in-flight scan", async () => {
+    const user = userEvent.setup();
+    const oldScan = deferred<Response>();
+    const fetchMock = vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input);
+      if (url === "/api/scans") {
+        return oldScan.promise;
+      }
+      const parseCalls = fetchMock.mock.calls.filter(([called]) => String(called) === "/api/universe/parse").length;
+      return Promise.resolve(
+        parseCalls === 1
+          ? jsonResponse(FIRST_PARSE)
+          : jsonResponse({
+              instruments: [{ symbol: "INFY", yahooSymbol: "INFY.NS" }],
+              rejected: [],
+              duplicateCount: 0,
+              totalRows: 1,
+            }),
+      );
+    });
+    render(<ScanForm />);
+
+    const input = screen.getByLabelText("Upload stock list");
+    await user.upload(input, new File(["Symbol\nRELIANCE\nTCS"], "older.csv", { type: "text/csv" }));
+    await screen.findByText("2 valid instruments");
+    await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
+    expect(input).toBeEnabled();
+    await user.upload(input, new File(["Symbol\nINFY"], "newer.csv", { type: "text/csv" }));
+    await screen.findByText("1 valid instrument");
+
+    await act(async () =>
+      oldScan.resolve(jsonResponse({ results: [{ symbol: "RELIANCE", status: "NO_SIGNAL" }] })),
+    );
+
+    expect(screen.queryByRole("table", { name: "Scan results" })).not.toBeInTheDocument();
+    expect(screen.getByText("Ready to scan 1 instrument.")).toBeInTheDocument();
+  });
+
+  it("lets a replacement upload supersede an in-flight export", async () => {
+    const user = userEvent.setup();
+    const oldExport = deferred<Response>();
+    let parseCount = 0;
+    const fetchMock = vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input);
+      if (url === "/api/universe/parse") {
+        parseCount += 1;
+        return Promise.resolve(
+          parseCount === 1
+            ? jsonResponse(FIRST_PARSE)
+            : jsonResponse({
+                instruments: [{ symbol: "INFY", yahooSymbol: "INFY.NS" }],
+                rejected: [],
+                duplicateCount: 0,
+                totalRows: 1,
+              }),
+        );
+      }
+      if (url === "/api/scans") {
+        return Promise.resolve(jsonResponse({ results: [{ symbol: "TCS", status: "NO_SIGNAL" }] }));
+      }
+      return oldExport.promise;
+    });
+    const createObjectURL = vi.fn(() => "blob:stale-export");
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL: vi.fn() });
+    render(<ScanForm />);
+
+    const input = screen.getByLabelText("Upload stock list");
+    await user.upload(input, new File(["Symbol\nRELIANCE\nTCS"], "older.csv", { type: "text/csv" }));
+    await screen.findByText("2 valid instruments");
+    await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
+    await screen.findByRole("table", { name: "Scan results" });
+    await user.click(screen.getByRole("button", { name: "Export results" }));
+    expect(input).toBeEnabled();
+
+    await user.upload(input, new File(["Symbol\nINFY"], "newer.csv", { type: "text/csv" }));
+    await screen.findByText("1 valid instrument");
+    await act(async () => oldExport.resolve(new Response("symbol,status")));
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Scan results" })).not.toBeInTheDocument();
+  });
+
+  it("rejects malformed parse JSON with an accessible error", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        instruments: [{ symbol: "RELIANCE" }],
+        rejected: [],
+        duplicateCount: 0,
+        totalRows: 1,
+      }),
+    );
+    render(<ScanForm />);
+
+    await user.upload(
+      screen.getByLabelText("Upload stock list"),
+      new File(["Symbol\nRELIANCE"], "stocks.csv", { type: "text/csv" }),
+    );
+
+    const error = await screen.findByRole("alert");
+    expect(error).toHaveTextContent("We couldn't load that stock list.");
+    expect(error).toHaveTextContent("The server returned an invalid stock list summary.");
+    expect(error).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Scan for BUY signals" })).toBeDisabled();
+  });
+
+  it("rejects malformed scan rows with an accessible error", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(FIRST_PARSE))
+      .mockResolvedValueOnce(
+        jsonResponse({ results: [{ symbol: "RELIANCE", status: "ALIEN" }] }),
+      );
+    render(<ScanForm />);
+
+    await user.upload(
+      screen.getByLabelText("Upload stock list"),
+      new File(["Symbol\nRELIANCE"], "stocks.csv", { type: "text/csv" }),
+    );
+    await screen.findByText("2 valid instruments");
+    await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
+
+    const error = await screen.findByRole("alert");
+    expect(error).toHaveTextContent("We couldn't complete this scan.");
+    expect(error).toHaveTextContent("The server returned invalid scan results.");
+    expect(error).toHaveFocus();
+    expect(screen.queryByRole("table", { name: "Scan results" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export results" })).toBeDisabled();
+  });
+
+  it("rejects scan timestamps that cannot be rendered", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(FIRST_PARSE))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          results: [
+            {
+              symbol: "RELIANCE",
+              status: "BUY",
+              recommendation: { ...BUY, dataAsOf: Number.MAX_VALUE },
+            },
+          ],
+        }),
+      );
+    render(<ScanForm />);
+
+    await user.upload(
+      screen.getByLabelText("Upload stock list"),
+      new File(["Symbol\nRELIANCE"], "stocks.csv", { type: "text/csv" }),
+    );
+    await screen.findByText("2 valid instruments");
+    await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
+
+    const error = await screen.findByRole("alert");
+    expect(error).toHaveTextContent("We couldn't complete this scan.");
+    expect(error).toHaveTextContent("The server returned invalid scan results.");
+    expect(screen.queryByRole("table", { name: "Scan results" })).not.toBeInTheDocument();
+  });
+
+  it("places scan results before the disabled model explanation in semantic order", () => {
+    render(<ScanForm />);
+
+    const results = screen.getByRole("region", { name: "Scan results" });
+    const mode = screen.getByRole("group", { name: "Recommendation mode" });
+    expect(results.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("starts with an accessible upload flow and disabled unavailable actions", () => {
@@ -189,7 +459,12 @@ describe("ScanForm", () => {
     const createObjectURL = vi.fn(() => "blob:scan-results");
     const revokeObjectURL = vi.fn();
     vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    let connectedDuringClick = false;
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      connectedDuringClick = this.isConnected;
+    });
     render(<ScanForm />);
 
     await user.upload(
@@ -199,9 +474,14 @@ describe("ScanForm", () => {
     await screen.findByText("2 valid instruments");
     await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
     await screen.findByRole("table", { name: "Scan results" });
-    await user.click(screen.getByRole("button", { name: "Export results" }));
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Export results" }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[2][0]).toBe("/api/scans/export");
     expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toEqual({
       results: [
@@ -211,6 +491,10 @@ describe("ScanForm", () => {
     });
     expect(createObjectURL).toHaveBeenCalledOnce();
     expect(click).toHaveBeenCalledOnce();
+    expect(connectedDuringClick).toBe(true);
+    expect(document.querySelector('a[download="scan-results.csv"]')).not.toBeInTheDocument();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    vi.runAllTimers();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:scan-results");
   });
 });

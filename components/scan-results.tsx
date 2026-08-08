@@ -42,7 +42,7 @@ export function ScanResults({ results }: { results: ScanItemResult[] }) {
   const [selectedSymbol, setSelectedSymbol] = useState<string>();
 
   return (
-    <div className="table-scroll" tabIndex={0} aria-label="Scrollable scan results">
+    <div className="table-scroll" role="region" tabIndex={0} aria-label="Scrollable scan results">
       <table aria-label="Scan results">
         <thead>
           <tr>

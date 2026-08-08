@@ -73,6 +73,10 @@ input[type="file"] {
   padding: 40px 0 36px;
 }
 
+.scan-workspace {
+  display: contents;
+}
+
 .intro {
   max-width: 760px;
   margin-bottom: 28px;
@@ -375,7 +379,7 @@ tbody tr:last-child > * {
 }
 
 .details-button {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 10px;
   border: 1px solid var(--border-strong);
   background: #fff;
