@@ -14,10 +14,13 @@ const rowSchema = z.object({
 
 const normalizeHeader = (header: string) => header.trim().toLowerCase().replace(/\s+/g, " ");
 const trim = (value: string | undefined) => value?.trim() || undefined;
+const canonicalizeSymbol = (value: string | undefined) => trim(value)?.toUpperCase();
+// NSE derivative contracts end in a dated `FUT` suffix or a dated strike followed by `CE`/`PE`.
+const derivativeContractPattern = /\d{2}[A-Z]{3}(?:FUT|\d+(?:\.\d+)?(?:CE|PE))$/;
 
 function normalizedRow(row: CsvRow): Record<string, unknown> {
   return {
-    symbol: trim(row.symbol),
+    symbol: canonicalizeSymbol(row.symbol),
     series: trim(row.series),
     companyName: trim(row["company name"]),
     industry: trim(row.industry),
@@ -49,7 +52,7 @@ export function parseUniverseCsv(csv: string): UniverseParseResult {
   parsed.data.forEach((row, index) => {
     const rowNumber = index + 2;
     const parseError = parseErrorsByRow.get(rowNumber);
-    const rawSymbol = trim(row.symbol);
+    const rawSymbol = canonicalizeSymbol(row.symbol);
 
     if (parseError) {
       rejected.push({ row: rowNumber, ...(rawSymbol ? { symbol: rawSymbol } : {}), reason: parseError });
@@ -70,6 +73,11 @@ export function parseUniverseCsv(csv: string): UniverseParseResult {
     const normalizedSeries = series?.toUpperCase();
     if (normalizedSeries && normalizedSeries !== "EQ") {
       rejected.push({ row: rowNumber, symbol, reason: "Series must be EQ" });
+      return;
+    }
+
+    if (derivativeContractPattern.test(symbol)) {
+      rejected.push({ row: rowNumber, symbol, reason: "Derivative contracts are not supported" });
       return;
     }
 

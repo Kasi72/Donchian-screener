@@ -48,6 +48,40 @@ HDFCBANK`);
     });
   });
 
+  it("rejects recognizable futures and options contracts from a Symbol-only CSV", () => {
+    const result = parseUniverseCsv(`Symbol
+NIFTY26AUGFUT
+BANKNIFTY26AUG54000CE
+RELIANCE`);
+
+    expect(result).toEqual({
+      instruments: [{ symbol: "RELIANCE", yahooSymbol: "RELIANCE.NS" }],
+      rejected: [
+        { row: 2, symbol: "NIFTY26AUGFUT", reason: "Derivative contracts are not supported" },
+        { row: 3, symbol: "BANKNIFTY26AUG54000CE", reason: "Derivative contracts are not supported" },
+      ],
+      duplicateCount: 0,
+      totalRows: 3,
+    });
+  });
+
+  it("canonicalizes symbols before mapping and duplicate detection", () => {
+    const result = parseUniverseCsv(`Symbol
+infy
+INFY
+Tcs`);
+
+    expect(result).toEqual({
+      instruments: [
+        { symbol: "INFY", yahooSymbol: "INFY.NS" },
+        { symbol: "TCS", yahooSymbol: "TCS.NS" },
+      ],
+      rejected: [],
+      duplicateCount: 1,
+      totalRows: 3,
+    });
+  });
+
   it("filters non-EQ rows, deduplicates symbols, and rejects bad rows without discarding valid rows", () => {
     const result = parseUniverseCsv(`Symbol,Series
   INFY  , EQ ${""}
