@@ -37,50 +37,8 @@ afterEach(() => {
 });
 
 describe("scan route provider selection", () => {
-  it("runs the real route and scan pipeline from normalized provider-boundary fixtures", async () => {
-    process.env[FIXTURE_ENVIRONMENT] = "deterministic-v1";
-
-    const response = await scanResults(
-      scanRequest(["RELIANCE", "TCS", "BROKEN"]),
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      results: [
-        expect.objectContaining({
-          symbol: "RELIANCE",
-          status: "BUY",
-          recommendation: expect.objectContaining({
-            recommendation: "BUY",
-            symbol: "RELIANCE",
-            yahooSymbol: "RELIANCE.NS",
-            timeframe: "1h",
-            signalTime: 1_786_095_900_000,
-            autoPeriod: 14,
-            probability: null,
-            entry: 102,
-            stop: 94.5,
-            target1: 109.5,
-            target2: 117,
-            currentLdc: 95.01,
-            previousLdc: 90,
-            anchorTime: 1_785_923_100_000,
-            strategyVersion: "rules-v1",
-            dataAsOf: 1_786_095_900_000,
-          }),
-        }),
-        { symbol: "TCS", status: "NO_SIGNAL" },
-        {
-          symbol: "BROKEN",
-          status: "PROVIDER_ERROR",
-          message: "Market data provider failed for BROKEN.",
-        },
-      ],
-    });
-  });
-
-  it.each([undefined, "1", "deterministic-v2"])(
-    "fails closed to the live provider when the fixture flag is %s",
+  it.each([undefined, "1", "deterministic-v1", "deterministic-v2"])(
+    "keeps the canonical route on the live provider when the fixture flag is %s",
     async (fixtureFlag) => {
       if (fixtureFlag === undefined) {
         delete process.env[FIXTURE_ENVIRONMENT];

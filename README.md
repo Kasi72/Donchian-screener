@@ -59,9 +59,17 @@ npx playwright install chromium
 npm run release:check
 ```
 
-`release:check` runs unit tests, lint, type-checking, E2E, and then the final production build in that order. Playwright owns a non-reusable production server on `127.0.0.1:3197` and builds it in `.next-e2e`, so it cannot attach to a developer server or race the final `.next` build.
+`release:check` runs unit tests, lint, type-checking, isolated E2E, an intentional-failure cleanup probe, the canonical production build, and a canonical-bundle audit. The E2E runner owns port `3197`, builds into `.next-e2e`, starts and stops the server itself, and refuses to run if that port is already occupied. It saves the exact bytes of `next-env.d.ts` before building and restores them in a `finally` block, including when the browser suite fails. This keeps E2E output and processes isolated from `.next` and developer servers.
 
-The Playwright server supplies deterministic raw Yahoo-shaped fixtures only when its exact server-side fixture token is present. `/api/scans` remains real: the route, Yahoo normalization, scan runner, signal selection, trade levels, per-symbol failure isolation, UI, and export route all execute. With the token absent or unrecognized, the provider fails closed to the live Yahoo implementation. The suite therefore does not depend on the current market or Yahoo availability.
+The canonical provider factory always constructs the live Yahoo provider; it does not inspect fixture environment variables. Only an E2E build made with the runner's private `E2E_BUILD=isolated-v1` build flag aliases that factory to an E2E-only module. Inside that separate artifact, the exact runtime token `SCREENER_E2E_FIXTURES=deterministic-v1` enables deterministic raw Yahoo-shaped fixtures; an absent or unrecognized token still selects Yahoo. `/api/scans` remains real: the route, Yahoo normalization, scan runner, signal selection, trade levels, per-symbol failure isolation, UI, and export route all execute. The suite therefore does not depend on the current market or Yahoo availability.
+
+`npm run build` explicitly removes `E2E_BUILD` from the build process. `npm run verify:canonical-bundle` then scans `.next/server` and fails if it finds the fixture token, fixture version, fixture class, fixture provider filename, or E2E factory filename. To run the deliberate cleanup proof independently, use:
+
+```bash
+npm run test:e2e:cleanup-check
+```
+
+That probe forces Playwright to fail after the isolated server starts, then verifies the tracked type file is byte-identical and port `3197` is free.
 
 The browser coverage includes a mixed BUY/no-signal/provider-error result set, calculation details, file replacement, heading-first mobile ordering and horizontal table scrolling, 44px targets for both rejected-row review and calculation details, and exact downloaded CSV content. To repeat both scenarios five times against one isolated server, run:
 

@@ -5,15 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/build-canonical.mjs",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test",
-    "test:e2e:server": "next build && next start --hostname 127.0.0.1 --port 3197",
-    "test:e2e:stability": "playwright test --repeat-each=5",
-    "release:check": "npm test && npm run lint && npm run typecheck && npm run test:e2e && npm run build"
+    "test:e2e": "node scripts/run-e2e.mjs",
+    "test:e2e:stability": "node scripts/run-e2e.mjs --repeat-each=5",
+    "test:e2e:cleanup-check": "node scripts/verify-e2e-cleanup.mjs",
+    "verify:canonical-bundle": "node scripts/verify-canonical-bundle.mjs",
+    "release:check": "npm test && npm run lint && npm run typecheck && npm run test:e2e && npm run test:e2e:cleanup-check && npm run build && npm run verify:canonical-bundle"
   },
   "dependencies": {
     "next": "16.3.0",
