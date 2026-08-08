@@ -52,18 +52,22 @@ Choose a timeframe, run the scan, and expand a BUY row to inspect its entry, sto
 
 ## Verification
 
-Install the Chromium test browser once, then run every release check:
+Install the Chromium test browser once, then run the ordered release check:
 
 ```bash
 npx playwright install chromium
-npm test
-npm run lint
-npm run typecheck
-npm run build
-npm run test:e2e
+npm run release:check
 ```
 
-The Playwright suite uses deterministic mocked scan responses; it does not depend on the current market or Yahoo availability. It covers a mixed BUY/no-signal/provider-error result set, error isolation, calculation details, file replacement, mobile ordering and horizontal table scrolling, the 44px details target, and exact downloaded CSV content.
+`release:check` runs unit tests, lint, type-checking, E2E, and then the final production build in that order. Playwright owns a non-reusable production server on `127.0.0.1:3197` and builds it in `.next-e2e`, so it cannot attach to a developer server or race the final `.next` build.
+
+The Playwright server supplies deterministic raw Yahoo-shaped fixtures only when its exact server-side fixture token is present. `/api/scans` remains real: the route, Yahoo normalization, scan runner, signal selection, trade levels, per-symbol failure isolation, UI, and export route all execute. With the token absent or unrecognized, the provider fails closed to the live Yahoo implementation. The suite therefore does not depend on the current market or Yahoo availability.
+
+The browser coverage includes a mixed BUY/no-signal/provider-error result set, calculation details, file replacement, heading-first mobile ordering and horizontal table scrolling, 44px targets for both rejected-row review and calculation details, and exact downloaded CSV content. To repeat both scenarios five times against one isolated server, run:
+
+```bash
+npm run test:e2e:stability
+```
 
 ## Yahoo data limitations
 

@@ -3,7 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { YahooMarketDataProvider } from "@/lib/market/yahoo-provider";
+import { createMarketDataProvider } from "@/lib/market/provider-factory";
 import { runScan } from "@/lib/scans/run-scan";
 
 const instrumentSchema = z.object({
@@ -33,7 +33,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Invalid scan request" }, { status: 400 });
   }
 
-  const provider = new YahooMarketDataProvider();
+  const provider = await createMarketDataProvider();
   const results = await runScan(
     parsed.data.instruments,
     parsed.data.timeframe,

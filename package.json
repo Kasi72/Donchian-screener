@@ -10,7 +10,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:server": "next build && next start --hostname 127.0.0.1 --port 3197",
+    "test:e2e:stability": "playwright test --repeat-each=5",
+    "release:check": "npm test && npm run lint && npm run typecheck && npm run test:e2e && npm run build"
   },
   "dependencies": {
     "next": "16.3.0",

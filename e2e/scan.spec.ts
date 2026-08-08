@@ -12,80 +12,6 @@ Nifty Alternate Series,Index,NIFTY,BE,INE000000000`;
 const REPLACEMENT_CSV = `Company Name,Industry,Symbol,Series,ISIN Code
 Infosys Ltd,IT Services,INFY,EQ,INE009A01021`;
 
-const INSTRUMENTS = [
-  {
-    symbol: "RELIANCE",
-    yahooSymbol: "RELIANCE.NS",
-    companyName: "Reliance Industries Ltd",
-    industry: "Energy",
-    series: "EQ",
-    isin: "INE002A01018",
-  },
-  {
-    symbol: "TCS",
-    yahooSymbol: "TCS.NS",
-    companyName: "Tata Consultancy Services",
-    industry: "IT Services",
-    series: "EQ",
-    isin: "INE467B01029",
-  },
-  {
-    symbol: "BROKEN",
-    yahooSymbol: "BROKEN.NS",
-    companyName: "Broken Feed Ltd",
-    industry: "Testing",
-    series: "EQ",
-    isin: "INE000X01000",
-  },
-];
-
-const RESULTS = [
-  {
-    symbol: "RELIANCE",
-    status: "BUY",
-    recommendation: {
-      recommendation: "BUY",
-      symbol: "RELIANCE",
-      yahooSymbol: "RELIANCE.NS",
-      timeframe: "1h",
-      signalTime: 1_786_096_800_000,
-      autoPeriod: 51,
-      probability: null,
-      entry: 1400.05,
-      stop: 1375.1,
-      target1: 1425,
-      target2: 1449.95,
-      currentLdc: 1384.5,
-      previousLdc: 1378.2,
-      anchorTime: 1_785_232_800_000,
-      strategyVersion: "rules-v1",
-      dataAsOf: 1_786_097_100_000,
-    },
-  },
-  { symbol: "TCS", status: "NO_SIGNAL" },
-  {
-    symbol: "BROKEN",
-    status: "PROVIDER_ERROR",
-    message: "Market data provider failed for BROKEN.",
-  },
-];
-
-async function mockScanBackend(page: Page): Promise<void> {
-  await page.route(/\/api\/scans$/, async (route) => {
-    const request = route.request();
-    expect(request.method()).toBe("POST");
-    expect(request.postDataJSON()).toEqual({
-      instruments: INSTRUMENTS,
-      timeframe: "1h",
-    });
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ results: RESULTS }),
-    });
-  });
-}
-
 async function uploadPrimaryUniverse(page: Page): Promise<void> {
   await page.getByLabel("Upload stock list").setInputFiles({
     name: "nse-five-column.csv",
@@ -111,8 +37,6 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
     if (message.type() === "error") runtimeErrors.push(message.text());
   });
   page.on("pageerror", (error) => runtimeErrors.push(error.message));
-  await mockScanBackend(page);
-
   await page.goto("/");
   await expect(page).toHaveTitle("Adaptive Donchian Screener");
   await expect(
@@ -134,15 +58,15 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
 
   const buyRow = table.getByRole("row").filter({ hasText: "RELIANCE" });
   await expect(buyRow).toContainText("BUY");
-  await expect(buyRow).toContainText("₹1,400.05");
-  await expect(buyRow).toContainText("₹1,375.10");
-  await expect(buyRow).toContainText("₹1,425.00");
-  await expect(buyRow).toContainText("₹1,449.95");
-  await expect(buyRow).toContainText("51");
-  await expect(buyRow.locator("time")).toHaveText("7 Aug 2026, 3:35 pm");
+  await expect(buyRow).toContainText("₹102.00");
+  await expect(buyRow).toContainText("₹94.50");
+  await expect(buyRow).toContainText("₹109.50");
+  await expect(buyRow).toContainText("₹117.00");
+  await expect(buyRow).toContainText("14");
+  await expect(buyRow.locator("time")).toHaveText("7 Aug 2026, 3:15 pm");
   await expect(buyRow.locator("time")).toHaveAttribute(
     "datetime",
-    "2026-08-07T10:05:00.000Z",
+    "2026-08-07T09:45:00.000Z",
   );
 
   await expect(table.getByRole("row").filter({ hasText: "TCS" })).toContainText(
@@ -165,8 +89,8 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
   const details = page.getByRole("region", {
     name: "Calculation details for RELIANCE",
   });
-  await expect(details).toContainText("Current Donchian low₹1,384.50");
-  await expect(details).toContainText("Previous Donchian low₹1,378.20");
+  await expect(details).toContainText("Current Donchian low₹95.01");
+  await expect(details).toContainText("Previous Donchian low₹90.00");
   await expect(details).toContainText("Strategy versionrules-v1");
 
   const downloadPromise = page.waitForEvent("download");
@@ -179,7 +103,7 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
   expect(downloadedCsv).toBe(
     [
       "symbol,yahooSymbol,timeframe,status,recommendation,signalTime,autoPeriod,probability,entry,stop,target1,target2,currentLdc,previousLdc,anchorTime,strategyVersion,dataAsOf,message",
-      "RELIANCE,RELIANCE.NS,1h,BUY,BUY,1786096800000,51,,1400.05,1375.1,1425,1449.95,1384.5,1378.2,1785232800000,rules-v1,1786097100000,",
+      "RELIANCE,RELIANCE.NS,1h,BUY,BUY,1786095900000,14,,102,94.5,109.5,117,95.01,90,1785923100000,rules-v1,1786095900000,",
       "TCS,,,NO_SIGNAL,,,,,,,,,,,,,,",
       "BROKEN,,,PROVIDER_ERROR,,,,,,,,,,,,,,Market data provider failed for BROKEN.",
     ].join("\r\n"),
@@ -204,12 +128,12 @@ test("keeps mobile controls, summary, results, and model explanation in rendered
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await mockScanBackend(page);
   await page.goto("/");
   await uploadPrimaryUniverse(page);
   await scanAtOneHour(page);
 
   const orderedSelectors = [
+    ".intro h1",
     ".upload-field",
     ".timeframe-field",
     ".primary-action",
@@ -242,6 +166,11 @@ test("keeps mobile controls, summary, results, and model explanation in rendered
     })(),
   }));
   expect(overflow).toEqual({ document: false, table: true });
+
+  const rejectedRowsTarget = await page
+    .getByText("Review rejected rows", { exact: true })
+    .boundingBox();
+  expect(rejectedRowsTarget?.height).toBeGreaterThanOrEqual(44);
 
   const detailsTarget = await page
     .getByRole("button", { name: "Show calculation details for RELIANCE" })
