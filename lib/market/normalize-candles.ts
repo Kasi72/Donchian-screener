@@ -1,4 +1,9 @@
 import type { Candle, CandleResponse, Timeframe } from "./provider";
+import {
+  isNseCandleComplete,
+  latestExpectedNseCompletion,
+  nseCandleCompletion,
+} from "./nse-session";
 
 export interface YahooCandle {
   date: Date | string | number;
@@ -11,111 +16,18 @@ export interface YahooCandle {
 
 export const MINIMUM_CANDLE_COUNT = 100;
 
-const INTRADAY_INTERVAL_MS: Partial<Record<Timeframe, number>> = {
-  "5m": 5 * 60_000,
-  "15m": 15 * 60_000,
-  "1h": 60 * 60_000,
-};
-
-const STALE_AFTER_MS: Record<Timeframe, number> = {
-  "5m": 15 * 60_000,
-  "15m": 45 * 60_000,
-  "1h": 3 * 60 * 60_000,
-  "1d": 7 * 24 * 60 * 60_000,
-  "1wk": 21 * 24 * 60 * 60_000,
-  "1mo": 93 * 24 * 60 * 60_000,
-};
-
-const kolkataFormatter = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Asia/Kolkata",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hourCycle: "h23",
-});
-
-interface KolkataParts {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-}
-
 type ValidYahooCandle = Omit<
   YahooCandle,
   "open" | "high" | "low" | "close" | "volume"
 > &
   Omit<Candle, "time">;
 
-function kolkataParts(time: number): KolkataParts {
-  const parts = kolkataFormatter.formatToParts(new Date(time));
-  const values = Object.fromEntries(
-    parts
-      .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, Number(part.value)]),
-  );
-
-  return {
-    year: values.year,
-    month: values.month,
-    day: values.day,
-    hour: values.hour,
-    minute: values.minute,
-    second: values.second,
-  };
-}
-
-function kolkataLocalEpoch(time: number): number {
-  const local = kolkataParts(time);
-  return Date.UTC(
-    local.year,
-    local.month - 1,
-    local.day,
-    local.hour,
-    local.minute,
-    local.second,
-    time % 1_000,
-  );
-}
-
-function completedAt(time: number, timeframe: Timeframe): number {
-  const intradayInterval = INTRADAY_INTERVAL_MS[timeframe];
-  if (intradayInterval) {
-    return time + intradayInterval;
-  }
-
-  const localTime = kolkataLocalEpoch(time);
-  const localDate = new Date(localTime);
-
-  if (timeframe === "1d") {
-    return localTime - (localTime % 86_400_000) + 86_400_000;
-  }
-
-  if (timeframe === "1wk") {
-    const weekday = localDate.getUTCDay();
-    const daysSinceMonday = (weekday + 6) % 7;
-    const monday = localTime - daysSinceMonday * 86_400_000;
-    return monday - (monday % 86_400_000) + 7 * 86_400_000;
-  }
-
-  return Date.UTC(localDate.getUTCFullYear(), localDate.getUTCMonth() + 1, 1);
-}
-
 export function isCandleComplete(
   candleStart: number,
   timeframe: Timeframe,
   now: Date,
 ): boolean {
-  if (INTRADAY_INTERVAL_MS[timeframe]) {
-    return now.getTime() >= completedAt(candleStart, timeframe);
-  }
-
-  return kolkataLocalEpoch(now.getTime()) >= completedAt(candleStart, timeframe);
+  return isNseCandleComplete(candleStart, timeframe, now);
 }
 
 function quoteTime(quote: YahooCandle): number | null {
@@ -159,39 +71,47 @@ export function normalizeCandles(
   timeframe: Timeframe,
   now: Date,
 ): CandleResponse {
-  const candidates = quotes
-    .map((quote, index) => ({ quote, index, time: quoteTime(quote) }))
+  const parsedQuotes = quotes.map((quote, index) => ({
+    quote,
+    index,
+    time: quoteTime(quote),
+  }));
+  const hasUnparseableTimestamp = parsedQuotes.some((candidate) => candidate.time === null);
+  const candidates = parsedQuotes
     .filter(
       (candidate): candidate is { quote: YahooCandle; index: number; time: number } =>
         candidate.time !== null && isCandleComplete(candidate.time, timeframe, now),
     )
     .sort((left, right) => left.time - right.time || left.index - right.index);
 
-  const unique = new Map<number, YahooCandle>();
+  const unique = new Map<number, ValidYahooCandle>();
   for (const candidate of candidates) {
-    unique.set(candidate.time, candidate.quote);
+    if (isValidQuote(candidate.quote)) {
+      unique.set(candidate.time, candidate.quote);
+    }
   }
 
   const candles: Candle[] = [];
   for (const [time, quote] of unique) {
-    if (isValidQuote(quote)) {
-      candles.push({
-        time,
-        open: quote.open,
-        high: quote.high,
-        low: quote.low,
-        close: quote.close,
-        volume: quote.volume,
-      });
-    }
+    candles.push({
+      time,
+      open: quote.open,
+      high: quote.high,
+      low: quote.low,
+      close: quote.close,
+      volume: quote.volume,
+    });
   }
 
   const asOf = candles.at(-1)?.time ?? 0;
-  if (candles.length === 0 && candidates.length > 0) {
+  if (candles.length === 0 && (candidates.length > 0 || hasUnparseableTimestamp)) {
     return { status: "INVALID_CANDLES", candles, asOf };
   }
 
-  if (asOf !== 0 && now.getTime() - asOf > STALE_AFTER_MS[timeframe]) {
+  if (
+    asOf !== 0 &&
+    nseCandleCompletion(asOf, timeframe) < latestExpectedNseCompletion(timeframe, now)
+  ) {
     return { status: "STALE_DATA", candles, asOf };
   }
 
