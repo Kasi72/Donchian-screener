@@ -1,0 +1,12 @@
+node_modules/
+.next/
+coverage/
+playwright-report/
+test-results/
+.env*
+!.env.example
+.worktrees/
+.superpowers/
+work/
+research/
+outputs/*.zip
