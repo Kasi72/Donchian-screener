@@ -17,12 +17,21 @@ export async function runScan(
     while (nextIndex < instruments.length) {
       const index = nextIndex;
       nextIndex += 1;
-      results[index] = await scanSymbol(
-        instruments[index],
-        timeframe,
-        provider,
-        now,
-      );
+      const instrument = instruments[index];
+      try {
+        results[index] = await scanSymbol(
+          instrument,
+          timeframe,
+          provider,
+          now,
+        );
+      } catch {
+        results[index] = {
+          symbol: instrument.symbol,
+          status: "PROVIDER_ERROR",
+          message: `Scan failed for ${instrument.symbol}.`,
+        };
+      }
     }
   }
 

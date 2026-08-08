@@ -154,6 +154,21 @@ describe("scanSymbol", () => {
       message: "Market data provider failed for BROKEN.",
     });
   });
+
+  it.each([
+    null,
+    { status: "OK", candles: null, asOf: 123 },
+  ])("turns malformed provider response %j into a safe provider error", async (response) => {
+    const provider: MarketDataProvider = {
+      getCandles: vi.fn().mockResolvedValue(response),
+    } as unknown as MarketDataProvider;
+
+    await expect(scanSymbol(instrument("MALFORMED"), "1d", provider)).resolves.toEqual({
+      symbol: "MALFORMED",
+      status: "PROVIDER_ERROR",
+      message: "Market data provider failed for MALFORMED.",
+    });
+  });
 });
 
 describe("runScan", () => {
@@ -203,6 +218,45 @@ describe("runScan", () => {
       },
       { symbol: "C", status: "SYMBOL_NOT_FOUND" },
     ]);
+  });
+
+  it("contains a thrown scan worker and continues later symbols in stable order", async () => {
+    vi.resetModules();
+    const processed: string[] = [];
+    vi.doMock("@/lib/signals/scan-symbol", async (importOriginal) => {
+      const original = await importOriginal<typeof import("@/lib/signals/scan-symbol")>();
+      return {
+        ...original,
+        async scanSymbol(item: UniverseInstrument): Promise<ScanItemResult> {
+          processed.push(item.symbol);
+          if (item.symbol === "S1") {
+            throw new Error("unexpected worker failure");
+          }
+          return { symbol: item.symbol, status: "NO_SIGNAL" };
+        },
+      };
+    });
+
+    try {
+      const { runScan: runWithThrowingWorker } = await import("@/lib/scans/run-scan");
+      const symbols = Array.from({ length: 8 }, (_, index) => `S${index}`);
+      const results = await runWithThrowingWorker(
+        symbols.map(instrument),
+        "1d",
+        providerReturning(completed()),
+      );
+
+      expect(processed).toContain("S7");
+      expect(results.map(({ symbol }) => symbol)).toEqual(symbols);
+      expect(results[1]).toEqual({
+        symbol: "S1",
+        status: "PROVIDER_ERROR",
+        message: "Scan failed for S1.",
+      });
+    } finally {
+      vi.doUnmock("@/lib/signals/scan-symbol");
+      vi.resetModules();
+    }
   });
 });
 
@@ -296,6 +350,50 @@ describe("scan CSV export", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ results: [null] }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid export request",
+    });
+  });
+
+  it.each([
+    {
+      name: "BUY without recommendation",
+      row: { symbol: "ACME", status: "BUY" },
+    },
+    {
+      name: "BUY with an incomplete recommendation",
+      row: {
+        symbol: "ACME",
+        status: "BUY",
+        recommendation: (({ target2: _target2, ...rest }) => rest)(recommendation()),
+      },
+    },
+    {
+      name: "BUY whose recommendation belongs to another symbol",
+      row: {
+        symbol: "ACME",
+        status: "BUY",
+        recommendation: recommendation({ symbol: "OTHER" }),
+      },
+    },
+    {
+      name: "non-BUY carrying a recommendation",
+      row: {
+        symbol: "ACME",
+        status: "NO_SIGNAL",
+        recommendation: recommendation(),
+      },
+    },
+  ])("rejects $name", async ({ row }) => {
+    const response = await exportResults(
+      new Request("http://localhost/api/scans/export", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ results: [row] }),
       }),
     );
 

@@ -44,10 +44,16 @@ const recommendationSchema = z.object({
   dataAsOf: z.number().finite(),
 });
 
-const resultSchema = z.object({
+const buyResultSchema = z.object({
+  symbol: z.string(),
+  status: z.literal("BUY"),
+  recommendation: recommendationSchema,
+  message: z.string().optional(),
+});
+
+const nonBuyResultSchema = z.object({
   symbol: z.string(),
   status: z.enum([
-    "BUY",
     "NO_SIGNAL",
     "OK",
     "INSUFFICIENT_HISTORY",
@@ -57,9 +63,24 @@ const resultSchema = z.object({
     "INVALID_CANDLES",
     "PROVIDER_ERROR",
   ]),
-  recommendation: recommendationSchema.optional(),
+  recommendation: z.never().optional(),
   message: z.string().optional(),
 });
+
+const resultSchema = z
+  .discriminatedUnion("status", [buyResultSchema, nonBuyResultSchema])
+  .superRefine((result, context) => {
+    if (
+      result.status === "BUY" &&
+      result.symbol !== result.recommendation.symbol
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["recommendation", "symbol"],
+        message: "Recommendation symbol must match row symbol",
+      });
+    }
+  });
 
 const exportRequestSchema = z.object({ results: z.array(resultSchema) });
 

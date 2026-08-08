@@ -1,5 +1,6 @@
 import type { UniverseInstrument } from "@/lib/domain/types";
 import type {
+  Candle,
   CandleResponse,
   MarketDataProvider,
   Timeframe,
@@ -53,6 +54,42 @@ function providerFailure(symbol: string): ScanItemResult {
   };
 }
 
+const CANDLE_STATUSES = new Set<CandleResponse["status"]>([
+  "OK",
+  "INSUFFICIENT_HISTORY",
+  "SYMBOL_NOT_FOUND",
+  "PROVIDER_RATE_LIMITED",
+  "STALE_DATA",
+  "INVALID_CANDLES",
+]);
+
+function isCandle(value: unknown): value is Candle {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return ["time", "open", "high", "low", "close", "volume"].every(
+    (field) =>
+      typeof candidate[field] === "number" &&
+      Number.isFinite(candidate[field]),
+  );
+}
+
+function isCandleResponse(value: unknown): value is CandleResponse {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.status === "string" &&
+    CANDLE_STATUSES.has(candidate.status as CandleResponse["status"]) &&
+    Array.isArray(candidate.candles) &&
+    candidate.candles.every(isCandle) &&
+    typeof candidate.asOf === "number" &&
+    Number.isFinite(candidate.asOf)
+  );
+}
+
 export async function scanSymbol(
   instrument: UniverseInstrument,
   timeframe: Timeframe,
@@ -61,11 +98,15 @@ export async function scanSymbol(
 ): Promise<ScanItemResult> {
   let candleResponse: CandleResponse;
   try {
-    candleResponse = await provider.getCandles(
+    const response: unknown = await provider.getCandles(
       instrument.yahooSymbol,
       timeframe,
       now,
     );
+    if (!isCandleResponse(response)) {
+      return providerFailure(instrument.symbol);
+    }
+    candleResponse = response;
   } catch {
     return providerFailure(instrument.symbol);
   }
