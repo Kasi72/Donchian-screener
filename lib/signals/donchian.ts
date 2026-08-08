@@ -59,11 +59,9 @@ export function bullishRollover(
   const previousLdc = lowerChannel(candles, endIndex - 1, period);
   const signalLowTicks = toTickUnits(candles[endIndex].low, tickSize);
   const currentLdcTicks = toTickUnits(currentLdc, tickSize);
-  const previousLdcTicks = toTickUnits(previousLdc, tickSize);
 
   return {
-    passed:
-      currentLdcTicks > previousLdcTicks && signalLowTicks === currentLdcTicks,
+    passed: currentLdc > previousLdc && signalLowTicks === currentLdcTicks,
     currentLdc,
     previousLdc,
   };

@@ -14,8 +14,8 @@ function candle(index: number, low: number): Candle {
 }
 
 function exactRolloverFixture(period: 51 | 94): Candle[] {
-  // At signal t=period, the independently confirmed anchor j=0 gives N=t-j.
-  // Previous [j..t-1] includes the 90 anchor; current [j+1..t] excludes it.
+  // At signal t=period, j=0 gives N=t-j for the window-boundary fixture.
+  // Previous [j..t-1] includes the outgoing 90 low; current [j+1..t] excludes it.
   const candles = Array.from({ length: period + 1 }, (_, index) =>
     candle(index, 110 + (index % 7)),
   );
@@ -56,6 +56,12 @@ describe("Donchian lower channel", () => {
     expect(lowerChannel(candles, 3, 3)).toBe(2);
   });
 
+  it("includes t when the right endpoint is the unique channel minimum", () => {
+    const candles = [candle(0, 1), candle(1, 8), candle(2, 7), candle(3, 2)];
+
+    expect(lowerChannel(candles, 3, 3)).toBe(2);
+  });
+
   it("compares equal prices as integer tick units rather than float tolerance", () => {
     const candles = [
       candle(0, 90),
@@ -74,18 +80,18 @@ describe("Donchian lower channel", () => {
     expect(bullishRollover(candles, 3, 3).passed).toBe(false);
   });
 
-  it("does not mistake a floating-point artifact for a one-tick channel rise", () => {
+  it("uses raw channel values for the rise even when both occupy the same tick", () => {
     const candles = [
-      candle(0, 100.1),
-      candle(1, 100.10000000000001),
+      candle(0, 100.11),
+      candle(1, 100.12),
       candle(2, 105),
-      candle(3, 100.10000000000001),
+      candle(3, 100.12),
     ];
 
     expect(bullishRollover(candles, 3, 3)).toEqual({
-      passed: false,
-      currentLdc: 100.10000000000001,
-      previousLdc: 100.1,
+      passed: true,
+      currentLdc: 100.12,
+      previousLdc: 100.11,
     });
   });
 
