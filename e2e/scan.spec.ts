@@ -13,6 +13,14 @@ Nifty Alternate Series,Index,NIFTY,BE,INE000000000`;
 const REPLACEMENT_CSV = `Company Name,Industry,Symbol,Series,ISIN Code
 Infosys Ltd,IT Services,INFY,EQ,INE009A01021`;
 
+const CSV_HEADER =
+  "symbol,yahooSymbol,timeframe,status,recommendation,signalTime,autoPeriod,probability,entry,stop,target1,target2,currentLdc,previousLdc,anchorTime,strategyVersion,dataAsOf,adjustmentMode,tickSize,tickPolicy,reactionHigh,rewardRisk,scoreVersion,score,higherTimeframeInput,anchorRationale,companyName,industry,message";
+const RELIANCE_CSV_ROW =
+  "RELIANCE,RELIANCE.NS,1h,BUY,BUY,1786095900000,14,,102,94.52,109.48,116.96,95.02,90,1785923100000,rules-v1,1786095900000,RAW,0.01,nse-cm-price-band-2025-v1,116,1.8716577540106951,structural-v1,0.7895,NEUTRAL_UNAVAILABLE,\"Selected confirmed pivot low 14 bars earlier: prominence 5.36 ATR, recovery 7.74 ATR, structural-v1 score 0.7895. Higher-timeframe input is unavailable and contributes a neutral zero.\",Reliance Industries Ltd,Energy,";
+const TCS_CSV_ROW = "TCS,,,NO_SIGNAL,,,,,,,,,,,,,,,,,,,,,,,,,";
+const BROKEN_CSV_ROW =
+  "BROKEN,,,PROVIDER_ERROR,,,,,,,,,,,,,,,,,,,,,,,,,Market data provider failed for BROKEN.";
+
 async function uploadPrimaryUniverse(page: Page): Promise<void> {
   await page.getByLabel("Upload stock list").setInputFiles({
     name: "nse-five-column.csv",
@@ -130,12 +138,7 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
     "scan-results-filtered.csv",
   );
   expect(downloadedCsv).toBe(
-    [
-      "symbol,yahooSymbol,timeframe,status,recommendation,signalTime,autoPeriod,probability,entry,stop,target1,target2,currentLdc,previousLdc,anchorTime,strategyVersion,dataAsOf,adjustmentMode,tickSize,tickPolicy,reactionHigh,rewardRisk,scoreVersion,score,higherTimeframeInput,anchorRationale,companyName,industry,message",
-      "RELIANCE,RELIANCE.NS,1h,BUY,BUY,1786095900000,14,,102,94.52,109.48,116.96,95.02,90,1785923100000,rules-v1,1786095900000,RAW,0.01,nse-cm-price-band-2025-v1,116,1.8716577540106951,structural-v1,0.7895,NEUTRAL_UNAVAILABLE,\"Selected confirmed pivot low 14 bars earlier: prominence 5.36 ATR, recovery 7.74 ATR, structural-v1 score 0.7895. Higher-timeframe input is unavailable and contributes a neutral zero.\",Reliance Industries Ltd,Energy,",
-      "TCS,,,NO_SIGNAL,,,,,,,,,,,,,,,,,,,,,,,,,",
-      "BROKEN,,,PROVIDER_ERROR,,,,,,,,,,,,,,,,,,,,,,,,,Market data provider failed for BROKEN.",
-    ].join("\r\n"),
+    [CSV_HEADER, RELIANCE_CSV_ROW, TCS_CSV_ROW, BROKEN_CSV_ROW].join("\r\n"),
   );
 
   await page.getByLabel("Upload stock list").setInputFiles({
@@ -200,8 +203,27 @@ test("sorts, combines filters, preserves details, and exports the intended rows"
   await expect(instruments).toHaveText(["BROKEN"]);
 
   const selectAllVisible = page.getByRole("checkbox", { name: "Select all visible results" });
+  await expect(selectAllVisible).not.toBeChecked();
+  await expect(selectAllVisible).toHaveJSProperty("indeterminate", false);
+
+  await page.getByRole("button", { name: "Clear table filters" }).click();
+  await expect(selectAllVisible).not.toBeChecked();
+  await expect(selectAllVisible).toHaveJSProperty("indeterminate", true);
+  await page.getByLabel("Instrument filter").fill("BROKEN");
+  await expect(selectAllVisible).not.toBeChecked();
+  await expect(selectAllVisible).toHaveJSProperty("indeterminate", false);
+
   await selectAllVisible.check();
   await expect(selectAllVisible).toBeChecked();
+  await expect(selectAllVisible).toHaveJSProperty("indeterminate", false);
+  await expect(page.getByText("2 selected", { exact: true })).toBeVisible();
+  await selectAllVisible.uncheck();
+  await expect(selectAllVisible).not.toBeChecked();
+  await expect(selectAllVisible).toHaveJSProperty("indeterminate", false);
+  await expect(page.getByText("1 selected", { exact: true })).toBeVisible();
+  await selectAllVisible.check();
+  await expect(selectAllVisible).toBeChecked();
+  await expect(selectAllVisible).toHaveJSProperty("indeterminate", false);
   await expect(page.getByText("2 selected", { exact: true })).toBeVisible();
 
   const selectedCsv = await readDownloadedCsv(
@@ -209,18 +231,14 @@ test("sorts, combines filters, preserves details, and exports the intended rows"
     "Export selected (2)",
     "scan-results-selected.csv",
   );
-  expect(selectedCsv).toContain("RELIANCE,RELIANCE.NS,1h,BUY");
-  expect(selectedCsv).toContain("BROKEN,,,PROVIDER_ERROR");
-  expect(selectedCsv).not.toContain("TCS,,,NO_SIGNAL");
+  expect(selectedCsv).toBe([CSV_HEADER, RELIANCE_CSV_ROW, BROKEN_CSV_ROW].join("\r\n"));
 
   const filteredCsv = await readDownloadedCsv(
     page,
     "Export filtered (1)",
     "scan-results-filtered.csv",
   );
-  expect(filteredCsv).toContain("BROKEN,,,PROVIDER_ERROR");
-  expect(filteredCsv).not.toContain("RELIANCE,RELIANCE.NS,1h,BUY");
-  expect(filteredCsv).not.toContain("TCS,,,NO_SIGNAL");
+  expect(filteredCsv).toBe([CSV_HEADER, BROKEN_CSV_ROW].join("\r\n"));
 
   await page.getByRole("button", { name: "Clear table filters" }).click();
   await page.getByText("Dark", { exact: true }).click();
