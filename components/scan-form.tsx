@@ -43,6 +43,10 @@ const NON_BUY_STATUSES = new Set<ScanItemResult["status"]>([
   "PROVIDER_RATE_LIMITED",
   "STALE_DATA",
   "INVALID_CANDLES",
+  "DATA_QUALITY_LIMITATION",
+  "PROVIDER_TIMEOUT",
+  "INVALID_INSTRUMENT",
+  "TICK_SIZE_UNRESOLVED",
   "PROVIDER_ERROR",
 ]);
 
@@ -64,6 +68,13 @@ function isFiniteNumber(value: unknown): value is number {
 
 function isRenderableTimestamp(value: unknown): value is number {
   return isFiniteNumber(value) && !Number.isNaN(new Date(value).getTime());
+}
+
+function hasFiniteScoreComponents(value: unknown): boolean {
+  return isRecord(value) &&
+    ["prominence", "recovery", "recency", "retests", "relativeVolume", "higherTimeframeAgreement"].every(
+      (component) => isFiniteNumber(value[component]),
+    );
 }
 
 function isUniverseInstrument(value: unknown): value is UniverseInstrument {
@@ -123,7 +134,22 @@ function isBuyRecommendation(value: unknown, symbol: string): boolean {
     isFiniteNumber(value.previousLdc) &&
     isRenderableTimestamp(value.anchorTime) &&
     value.strategyVersion === "rules-v1" &&
-    isRenderableTimestamp(value.dataAsOf)
+    isRenderableTimestamp(value.dataAsOf) &&
+    (value.adjustmentMode === "RAW" || value.adjustmentMode === "BACK_ADJUSTED") &&
+    isFiniteNumber(value.tickSize) &&
+    value.tickSize > 0 &&
+    (value.tickPolicy === "nse-cm-price-band-2025-v1" ||
+      value.tickPolicy === "nse-cm-legacy-0.05-v1" ||
+      value.tickPolicy === "nse-index-metadata-v1") &&
+    isFiniteNumber(value.reactionHigh) &&
+    isFiniteNumber(value.rewardRisk) &&
+    value.scoreVersion === "structural-v1" &&
+    isFiniteNumber(value.score) &&
+    hasFiniteScoreComponents(value.scoreComponents) &&
+    value.higherTimeframeInput === "NEUTRAL_UNAVAILABLE" &&
+    typeof value.anchorRationale === "string" &&
+    isOptionalString(value.companyName) &&
+    isOptionalString(value.industry)
   );
 }
 
@@ -419,6 +445,18 @@ export function ScanForm() {
           >
             {phase === "scanning" ? "Scanning…" : "Scan for BUY signals"}
           </button>
+          {phase === "scanning" ? (
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={() => {
+                cancelActiveRequest();
+                setPhase("ready");
+              }}
+            >
+              Cancel scan
+            </button>
+          ) : null}
         </div>
 
         <div className="summary-area" aria-live="polite">
@@ -472,7 +510,13 @@ export function ScanForm() {
           </button>
         </div>
         {results.length > 0 ? (
-          <ScanResults results={results} />
+          <>
+            <p className="execution-caveat">
+              Entry reference is the completed signal candle close. Actual execution is the next
+              obtainable price; skip a gap that reduces reward/risk below your minimum.
+            </p>
+            <ScanResults results={results} />
+          </>
         ) : phase === "parsing" || phase === "scanning" ? null : (
           <p className="empty-state">
             {parseResult && instruments.length > 0

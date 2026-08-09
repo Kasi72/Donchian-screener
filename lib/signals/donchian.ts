@@ -1,5 +1,4 @@
 import type { Candle } from "@/lib/market/provider";
-import { DEFAULT_TICK_SIZE } from "./strategy-config";
 
 function assertPeriod(period: number): void {
   if (!Number.isInteger(period) || period <= 0) {
@@ -47,7 +46,7 @@ export function bullishRollover(
   candles: Candle[],
   endIndex: number,
   period: number,
-  tickSize = DEFAULT_TICK_SIZE,
+  tickSize: number,
 ): { passed: boolean; currentLdc: number; previousLdc: number } {
   assertPeriod(period);
   assertEndIndex(candles, endIndex);

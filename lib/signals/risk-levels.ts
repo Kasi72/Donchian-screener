@@ -40,16 +40,24 @@ function assertInputs(
   }
 }
 
-function roundStopDown(price: number, tickSize: number): number {
+function floorTicks(price: number, tickSize: number): number {
   const quotient = price / tickSize;
   const nearestInteger = Math.round(quotient);
   const precisionTolerance =
     Number.EPSILON * Math.max(1, Math.abs(quotient)) * 8;
-  const ticks =
+  return (
     Math.abs(quotient - nearestInteger) <= precisionTolerance
       ? nearestInteger
-      : Math.floor(quotient);
-  return ticks * tickSize;
+      : Math.floor(quotient)
+  );
+}
+
+function ceilTicks(price: number, tickSize: number): number {
+  return -floorTicks(-price, tickSize);
+}
+
+function priceAtTicks(ticks: number, tickSize: number): number {
+  return Number((ticks * tickSize).toPrecision(15));
 }
 
 function highestConfirmedReactionHigh(
@@ -98,25 +106,33 @@ export function calculateTradeLevels(
   const signal = candles[signalIndex];
   const atr = atrAt(candles, signalIndex, ATR_PERIOD);
   const buffer = Math.max(tickSize, 0.1 * atr);
-  const entry = signal.close;
-  const stop = roundStopDown(signal.low - buffer, tickSize);
-  const risk = entry - stop;
+  const entryTicks = ceilTicks(signal.close, tickSize);
+  const stopTicks = floorTicks(signal.low - buffer, tickSize);
+  const riskTicks = entryTicks - stopTicks;
 
-  if (!Number.isFinite(risk) || risk <= 0) {
+  if (!Number.isFinite(riskTicks) || riskTicks <= 0) {
     return null;
   }
 
-  const target1 = entry + risk;
-  const target2 = entry + 2 * risk;
-  const reactionHigh = highestConfirmedReactionHigh(
+  const target1Ticks = entryTicks + riskTicks;
+  const target2Ticks = entryTicks + 2 * riskTicks;
+  const rawReactionHigh = highestConfirmedReactionHigh(
     candles,
     signalIndex,
     anchorIndex,
   );
 
-  if (reactionHigh === undefined || reactionHigh < target1) {
+  if (rawReactionHigh === undefined) {
     return null;
   }
+  const reactionHighTicks = floorTicks(rawReactionHigh, tickSize);
+  if (reactionHighTicks < target1Ticks) return null;
+
+  const entry = priceAtTicks(entryTicks, tickSize);
+  const stop = priceAtTicks(stopTicks, tickSize);
+  const target1 = priceAtTicks(target1Ticks, tickSize);
+  const target2 = priceAtTicks(target2Ticks, tickSize);
+  const reactionHigh = priceAtTicks(reactionHighTicks, tickSize);
 
   return {
     entry,
@@ -124,6 +140,6 @@ export function calculateTradeLevels(
     target1,
     target2,
     reactionHigh,
-    rewardRisk: (reactionHigh - entry) / risk,
+    rewardRisk: (reactionHighTicks - entryTicks) / riskTicks,
   };
 }

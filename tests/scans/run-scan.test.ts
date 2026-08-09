@@ -2,12 +2,15 @@ import Papa from "papaparse";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+const yahooRequests = vi.hoisted(() => [] as string[]);
 vi.mock("@/lib/market/yahoo-provider", () => ({
   YahooMarketDataProvider: class {
-    async getCandles(): Promise<CandleResponse> {
+    async getCandles(symbol: string): Promise<CandleResponse> {
+      yahooRequests.push(symbol);
       return {
         status: "OK",
         asOf: 99 * 60_000,
+        adjustmentMode: "BACK_ADJUSTED",
         candles: Array.from({ length: 100 }, (_, index) => ({
           time: index * 60_000,
           open: 111,
@@ -70,7 +73,12 @@ function buyFixture(): Candle[] {
 }
 
 function completed(candles: Candle[] = buyFixture()): CandleResponse {
-  return { status: "OK", candles, asOf: candles.at(-1)?.time ?? 0 };
+  return {
+    status: "OK",
+    candles,
+    asOf: candles.at(-1)?.time ?? 0,
+    adjustmentMode: "BACK_ADJUSTED",
+  };
 }
 
 function instrument(symbol: string): UniverseInstrument {
@@ -108,6 +116,23 @@ describe("scanSymbol", () => {
         anchorTime: 85 * 60_000,
         strategyVersion: "rules-v1",
         dataAsOf: 99 * 60_000,
+        adjustmentMode: "BACK_ADJUSTED",
+        tickSize: 0.05,
+        tickPolicy: "nse-cm-legacy-0.05-v1",
+        reactionHigh: 116,
+        rewardRisk: expect.any(Number),
+        scoreVersion: "structural-v1",
+        score: expect.any(Number),
+        scoreComponents: {
+          prominence: expect.any(Number),
+          recovery: expect.any(Number),
+          recency: expect.any(Number),
+          retests: expect.any(Number),
+          relativeVolume: expect.any(Number),
+          higherTimeframeAgreement: 0,
+        },
+        higherTimeframeInput: "NEUTRAL_UNAVAILABLE",
+        anchorRationale: expect.stringContaining("confirmed pivot low"),
       },
     });
     expect(result.recommendation?.stop).toBeLessThan(102);
@@ -127,6 +152,15 @@ describe("scanSymbol", () => {
     expect(result).toEqual({ symbol: "FLAT", status: "NO_SIGNAL" });
   });
 
+  it("rejects a rollover when the signal close is not above its low", async () => {
+    const candles = buyFixture();
+    candles[99] = candle(99, 95.02, 108, 95.02);
+
+    await expect(
+      scanSymbol(instrument("CLOSE-AT-LOW"), "1d", providerReturning(completed(candles))),
+    ).resolves.toEqual({ symbol: "CLOSE-AT-LOW", status: "NO_SIGNAL" });
+  });
+
   it.each([
     "INSUFFICIENT_HISTORY",
     "SYMBOL_NOT_FOUND",
@@ -137,7 +171,7 @@ describe("scanSymbol", () => {
     const result = await scanSymbol(
       instrument("DATA"),
       "1d",
-      providerReturning({ status, candles: [], asOf: 0 }),
+      providerReturning({ status, candles: [], asOf: 0, adjustmentMode: "BACK_ADJUSTED" }),
     );
 
     expect(result).toEqual({ symbol: "DATA", status });
@@ -201,7 +235,12 @@ describe("runScan", () => {
           throw new Error("connection reset");
         }
         if (yahooSymbol === "C.NS") {
-          return { status: "SYMBOL_NOT_FOUND", candles: [], asOf: 0 };
+          return {
+            status: "SYMBOL_NOT_FOUND",
+            candles: [],
+            asOf: 0,
+            adjustmentMode: "BACK_ADJUSTED",
+          };
         }
         return completed(Array.from({ length: 100 }, (_, index) => candle(index)));
       },
@@ -258,6 +297,56 @@ describe("runScan", () => {
       vi.resetModules();
     }
   });
+
+  it("propagates request cancellation to the provider and stops the scan", async () => {
+    const controller = new AbortController();
+    let receivedSignal: AbortSignal | undefined;
+    const provider: MarketDataProvider = {
+      async getCandles(_symbol, _timeframe, _now, options) {
+        receivedSignal = options?.signal;
+        return await new Promise<CandleResponse>((_resolve, reject) => {
+          options?.signal?.addEventListener(
+            "abort",
+            () => reject(options.signal?.reason),
+            { once: true },
+          );
+        });
+      },
+    };
+
+    const pending = runScan([instrument("A"), instrument("B")], "1d", provider, {
+      signal: controller.signal,
+      itemTimeoutMs: 5_000,
+    });
+    await vi.waitFor(() => expect(receivedSignal).toBeDefined());
+    controller.abort(new DOMException("User cancelled scan", "AbortError"));
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(receivedSignal?.aborted).toBe(true);
+  });
+
+  it("bounds each provider request with a deadline and returns a timeout data status", async () => {
+    let deadlineMs: number | undefined;
+    const provider: MarketDataProvider = {
+      async getCandles(_symbol, _timeframe, _now, options) {
+        deadlineMs = options?.deadlineMs;
+        return await new Promise<CandleResponse>((_resolve, reject) => {
+          options?.signal?.addEventListener(
+            "abort",
+            () => reject(options.signal?.reason),
+            { once: true },
+          );
+        });
+      },
+    };
+
+    const startedAt = Date.now();
+    await expect(
+      runScan([instrument("SLOW")], "1d", provider, { itemTimeoutMs: 20 }),
+    ).resolves.toEqual([{ symbol: "SLOW", status: "PROVIDER_TIMEOUT" }]);
+    expect(deadlineMs).toBeGreaterThanOrEqual(startedAt + 15);
+    expect(deadlineMs).toBeLessThanOrEqual(Date.now() + 20);
+  });
 });
 
 function recommendation(overrides: Partial<BuyRecommendation> = {}): BuyRecommendation {
@@ -278,6 +367,16 @@ function recommendation(overrides: Partial<BuyRecommendation> = {}): BuyRecommen
     anchorTime: 2,
     strategyVersion: "rules-v1",
     dataAsOf: 3,
+    adjustmentMode: "BACK_ADJUSTED",
+    tickSize: 0.05,
+    tickPolicy: "nse-cm-legacy-0.05-v1",
+    reactionHigh: 110,
+    rewardRisk: 2,
+    scoreVersion: "structural-v1",
+    score: 0.5705,
+    scoreComponents: { prominence: 0.5, recovery: 0.5, recency: 0.5, retests: 0.5, relativeVolume: 0.5, higherTimeframeAgreement: 0 },
+    higherTimeframeInput: "NEUTRAL_UNAVAILABLE",
+    anchorRationale: "Confirmed structural pivot selected causally.",
     ...overrides,
   };
 }
@@ -402,6 +501,23 @@ describe("scan CSV export", () => {
       error: "Invalid export request",
     });
   });
+
+  it("rejects an export larger than the production item bound", async () => {
+    const response = await exportResults(
+      new Request("http://localhost/api/scans/export", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          results: Array.from({ length: 501 }, (_, index) => ({
+            symbol: `S${index}`,
+            status: "NO_SIGNAL",
+          })),
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(413);
+  });
 });
 
 describe("scan JSON endpoint", () => {
@@ -434,5 +550,95 @@ describe("scan JSON endpoint", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: "Invalid scan request" });
+  });
+
+  it("derives the provider symbol from canonical identity instead of trusting yahooSymbol", async () => {
+    yahooRequests.length = 0;
+    const response = await scanResults(
+      new Request("http://localhost/api/scans", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          instruments: [
+            { symbol: "RELIANCE", yahooSymbol: "^NSEI", companyName: "Reliance Industries" },
+          ],
+          timeframe: "1d",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(yahooRequests).toEqual(["RELIANCE.NS"]);
+  });
+
+  it.each(["^NSEI", "^NSEBANK", "^CRSLDX", "^INDIAVIX"])(
+    "fetches the built-in index %s without an equity suffix",
+    async (symbol) => {
+      yahooRequests.length = 0;
+      const response = await scanResults(
+        new Request("http://localhost/api/scans", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            instruments: [{ symbol, yahooSymbol: `${symbol}.NS` }],
+            timeframe: "1d",
+          }),
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(yahooRequests).toEqual([symbol]);
+    },
+  );
+
+  it("deduplicates canonical instruments at the server boundary", async () => {
+    yahooRequests.length = 0;
+    const response = await scanResults(
+      new Request("http://localhost/api/scans", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          instruments: [
+            { symbol: "reliance", yahooSymbol: "BAD" },
+            { symbol: " RELIANCE ", yahooSymbol: "ALSO-BAD" },
+          ],
+          timeframe: "1d",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(yahooRequests).toEqual(["RELIANCE.NS"]);
+    await expect(response.json()).resolves.toMatchObject({ results: [{ symbol: "RELIANCE" }] });
+  });
+
+  it("rejects scans larger than the production item bound", async () => {
+    const response = await scanResults(
+      new Request("http://localhost/api/scans", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          instruments: Array.from({ length: 501 }, (_, index) => ({ symbol: `S${index}` })),
+          timeframe: "1d",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(413);
+  });
+
+  it("rejects an oversized scan body before parsing it", async () => {
+    const response = await scanResults(
+      new Request("http://localhost/api/scans", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          instruments: [{ symbol: "RELIANCE", companyName: "X".repeat(1_100_000) }],
+          timeframe: "1d",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(413);
   });
 });

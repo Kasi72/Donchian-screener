@@ -103,4 +103,58 @@ TCS,EQ`);
       totalRows: 5,
     });
   });
+
+  it("requires every row to be EQ when the Series header is present", () => {
+    const result = parseUniverseCsv(`Symbol,Series
+INFY,
+TCS,${"   "}
+RELIANCE,EQ`);
+
+    expect(result).toEqual({
+      instruments: [
+        { symbol: "RELIANCE", yahooSymbol: "RELIANCE.NS", series: "EQ" },
+      ],
+      rejected: [
+        { row: 2, symbol: "INFY", reason: "Series must be EQ" },
+        { row: 3, symbol: "TCS", reason: "Series must be EQ" },
+      ],
+      duplicateCount: 0,
+      totalRows: 3,
+    });
+  });
+
+  it("maps only the explicit built-in NSE indices without adding an equity suffix", () => {
+    const result = parseUniverseCsv(`Symbol
+^NSEI
+^NSEBANK
+^CRSLDX
+^INDIAVIX
+RELIANCE`);
+
+    expect(result.instruments.map(({ symbol, yahooSymbol }) => ({ symbol, yahooSymbol }))).toEqual([
+      { symbol: "^NSEI", yahooSymbol: "^NSEI" },
+      { symbol: "^NSEBANK", yahooSymbol: "^NSEBANK" },
+      { symbol: "^CRSLDX", yahooSymbol: "^CRSLDX" },
+      { symbol: "^INDIAVIX", yahooSymbol: "^INDIAVIX" },
+      { symbol: "RELIANCE", yahooSymbol: "RELIANCE.NS" },
+    ]);
+  });
+
+  it("maps common index aliases and permits their blank Series cells", () => {
+    const result = parseUniverseCsv(`Symbol,Series
+NIFTY,
+BANKNIFTY,
+INDIAVIX,`);
+
+    expect(result).toEqual({
+      instruments: [
+        { symbol: "NIFTY", yahooSymbol: "^NSEI" },
+        { symbol: "BANKNIFTY", yahooSymbol: "^NSEBANK" },
+        { symbol: "INDIAVIX", yahooSymbol: "^INDIAVIX" },
+      ],
+      rejected: [],
+      duplicateCount: 0,
+      totalRows: 3,
+    });
+  });
 });

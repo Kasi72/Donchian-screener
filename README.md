@@ -46,7 +46,7 @@ Reliance Industries Ltd,Energy,RELIANCE,EQ,INE002A01018
 Tata Consultancy Services,IT Services,TCS,EQ,INE467B01029
 ```
 
-`Symbol` is required. The parser trims and uppercases symbols, accepts cash-equity `EQ` rows, rejects other series and derivative contracts, and keeps the first occurrence of a duplicate symbol. Symbols are mapped to Yahoo's `.NS` suffix. Uploading another file replaces the current list and clears prior results.
+`Symbol` is required. The parser trims and uppercases symbols, accepts cash-equity `EQ` rows, rejects other series and derivative contracts, and keeps the first occurrence of a duplicate symbol. Cash symbols map to Yahoo's `.NS` suffix. Index aliases `NIFTY`, `NIFTY50`, `BANKNIFTY`, `NIFTYBANK`, and `INDIAVIX` are also supported (leave `Series` blank). Uploading another file replaces the current list and clears prior results. Futures and options are screened through their cash/index underlyings, not individual expiring contracts.
 
 Choose a timeframe, run the scan, and expand a BUY row to inspect its entry, stop, targets, auto-selected period, Donchian values, strategy version, and data timestamp. `Export results` downloads the complete visible result set as `scan-results.csv`, including no-signal and provider-error rows.
 
@@ -82,7 +82,9 @@ npm run test:e2e:stability
 - Yahoo Finance is an external dependency and can be unavailable, delayed, stale, rate-limited, or change behavior without notice.
 - Available lookback varies by interval; short intraday intervals have less history than daily, weekly, or monthly intervals.
 - The scanner removes incomplete candles and reports insufficient, stale, invalid, missing-symbol, rate-limited, or provider-error states instead of silently converting them into signals.
+- Daily, weekly, and monthly equity candles are back-adjusted when Yahoo supplies adjusted closes; intraday candles and indices remain raw and are labelled as such in BUY details.
+- The built-in NSE holiday/special-session calendar is explicit for 2024–2026. Dates beyond that coverage return a data-quality limitation until the calendar is updated.
 - A failure for one symbol remains isolated so other symbols can still complete.
 - Live output is point-in-time research data. A successful data fetch or a BUY label does not establish future performance or profitability.
 
-The `Validated Model BUY` mode remains disabled until a separately trained out-of-sample model passes its acceptance checks. The current implementation is the deterministic `rules-v1` strategy.
+The `Validated Model BUY` mode remains disabled until a separately trained out-of-sample model passes its acceptance checks. The current implementation is the deterministic `rules-v1` strategy. Higher-timeframe agreement is explicitly neutral/unavailable in this release, and unrestricted `Research Match` diagnostics remain a later research feature; neither is represented as validated performance.

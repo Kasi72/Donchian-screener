@@ -1,6 +1,7 @@
 import Papa from "papaparse";
 import { z } from "zod";
 import type { UniverseInstrument, UniverseParseResult } from "@/lib/domain/types";
+import { providerSymbolForCanonical } from "@/lib/instruments/nse-instruments";
 
 type CsvRow = Record<string, string | undefined>;
 
@@ -48,6 +49,7 @@ export function parseUniverseCsv(csv: string): UniverseParseResult {
   const rejected: UniverseParseResult["rejected"] = [];
   const symbols = new Set<string>();
   let duplicateCount = 0;
+  const hasSeriesHeader = parsed.meta.fields?.includes("series") ?? false;
 
   parsed.data.forEach((row, index) => {
     const rowNumber = index + 2;
@@ -71,7 +73,9 @@ export function parseUniverseCsv(csv: string): UniverseParseResult {
 
     const { symbol, series, companyName, industry, isin } = validation.data;
     const normalizedSeries = series?.toUpperCase();
-    if (normalizedSeries && normalizedSeries !== "EQ") {
+    const mappedSymbol = providerSymbolForCanonical(symbol);
+    const isKnownIndex = mappedSymbol?.startsWith("^") === true;
+    if (hasSeriesHeader && normalizedSeries !== "EQ" && !(normalizedSeries === undefined && isKnownIndex)) {
       rejected.push({ row: rowNumber, symbol, reason: "Series must be EQ" });
       return;
     }
@@ -87,9 +91,15 @@ export function parseUniverseCsv(csv: string): UniverseParseResult {
     }
     symbols.add(symbol);
 
+    const yahooSymbol = mappedSymbol;
+    if (yahooSymbol === undefined) {
+      rejected.push({ row: rowNumber, symbol, reason: "Unsupported NSE instrument identity" });
+      return;
+    }
+
     instruments.push({
       symbol,
-      yahooSymbol: `${symbol}.NS`,
+      yahooSymbol,
       ...(companyName ? { companyName } : {}),
       ...(industry ? { industry } : {}),
       ...(normalizedSeries ? { series: normalizedSeries } : {}),

@@ -27,16 +27,25 @@ function levelsFixture(): Candle[] {
 }
 
 describe("trade levels", () => {
-  it("uses the signal close, a downward tick-rounded ATR stop, and exact 1R/2R targets", () => {
+  it("rounds every level to conservative integer ticks", () => {
     const levels = calculateTradeLevels(levelsFixture(), 17, 0, 0.05);
 
     expect(levels).not.toBeNull();
-    expect(levels?.entry).toBe(101.03);
+    expect(levels?.entry).toBeCloseTo(101.05, 12);
     expect(levels?.stop).toBeCloseTo(99.8, 12);
-    expect(levels?.target1).toBeCloseTo(102.26, 12);
-    expect(levels?.target2).toBeCloseTo(103.49, 12);
-    expect(levels?.reactionHigh).toBe(103.03);
-    expect(levels?.rewardRisk).toBeCloseTo(2 / 1.23, 12);
+    expect(levels?.target1).toBeCloseTo(102.3, 12);
+    expect(levels?.target2).toBeCloseTo(103.55, 12);
+    expect(levels?.reactionHigh).toBe(103);
+    expect(levels?.rewardRisk).toBeCloseTo(1.95 / 1.25, 12);
+    for (const price of [
+      levels?.entry,
+      levels?.stop,
+      levels?.target1,
+      levels?.target2,
+      levels?.reactionHigh,
+    ]) {
+      expect(Math.round((price ?? 0) / 0.05)).toBeCloseTo((price ?? 0) / 0.05, 12);
+    }
   });
 
   it("preserves a stop that is already exactly aligned to a decimal tick", () => {

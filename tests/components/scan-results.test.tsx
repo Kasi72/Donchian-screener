@@ -34,6 +34,16 @@ const RESULTS: ScanItemResult[] = [
       anchorTime: Date.UTC(2026, 6, 28, 10),
       strategyVersion: "rules-v1",
       dataAsOf: Date.UTC(2026, 7, 7, 10, 5),
+      adjustmentMode: "BACK_ADJUSTED",
+      tickSize: 0.05,
+      tickPolicy: "nse-cm-legacy-0.05-v1",
+      reactionHigh: 1450,
+      rewardRisk: 2,
+      scoreVersion: "structural-v1",
+      score: 0.5705,
+      scoreComponents: { prominence: 0.5, recovery: 0.5, recency: 0.5, retests: 0.5, relativeVolume: 0.5, higherTimeframeAgreement: 0 },
+      higherTimeframeInput: "NEUTRAL_UNAVAILABLE",
+      anchorRationale: "Confirmed structural pivot selected causally.",
     },
   },
   { symbol: "TCS", status: "NO_SIGNAL" },
@@ -98,5 +108,8 @@ describe("ScanResults", () => {
     expect(details).toHaveTextContent("Previous Donchian low₹1,378.20");
     expect(details).toHaveTextContent("Strategy versionrules-v1");
     expect(details).toHaveTextContent("Yahoo symbolRELIANCE.NS");
+    expect(details).toHaveTextContent("Price adjustmentBACK_ADJUSTED");
+    expect(details).toHaveTextContent("Planned reward/risk2.00");
+    expect(details).toHaveTextContent("Anchor rationaleConfirmed structural pivot selected causally.");
   });
 });

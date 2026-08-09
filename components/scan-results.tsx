@@ -15,6 +15,10 @@ const STATUS_LABELS: Record<ScanItemResult["status"], string> = {
   STALE_DATA: "Market data is stale",
   INVALID_CANDLES: "Market data could not be validated",
   PROVIDER_ERROR: "Market data provider error",
+  DATA_QUALITY_LIMITATION: "Market data calendar or adjustment coverage is limited",
+  PROVIDER_TIMEOUT: "Market data request timed out",
+  INVALID_INSTRUMENT: "Instrument is not supported",
+  TICK_SIZE_UNRESOLVED: "Instrument tick size could not be resolved",
 };
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", {
@@ -48,7 +52,7 @@ export function ScanResults({ results }: { results: ScanItemResult[] }) {
           <tr>
             <th scope="col">Instrument</th>
             <th scope="col">Status</th>
-            <th scope="col" className="number-cell">Entry</th>
+            <th scope="col" className="number-cell">Entry reference</th>
             <th scope="col" className="number-cell">Stop</th>
             <th scope="col" className="number-cell">Target 1</th>
             <th scope="col" className="number-cell">Target 2</th>

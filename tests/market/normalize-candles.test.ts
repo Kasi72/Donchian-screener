@@ -61,11 +61,18 @@ describe("normalizeCandles", () => {
   });
 
   it("reports insufficient history after cleaning otherwise valid completed candles", () => {
-    const now = new Date(`2026-08-10T12:00:00${IST}`);
-    const firstCandle = new Date(`2026-08-10T03:45:00${IST}`).getTime();
-    const candles = Array.from({ length: MINIMUM_CANDLE_COUNT - 1 }, (_, index) =>
-      candle(new Date(firstCandle + index * 5 * 60_000).toISOString()),
-    );
+    const now = new Date(`2026-08-07T16:00:00${IST}`);
+    const sessionStarts = [
+      new Date(`2026-08-06T09:15:00${IST}`).getTime(),
+      new Date(`2026-08-07T09:15:00${IST}`).getTime(),
+    ];
+    const candles = sessionStarts
+      .flatMap((sessionStart) =>
+        Array.from({ length: 75 }, (_, index) =>
+          candle(new Date(sessionStart + index * 5 * 60_000).toISOString()),
+        ),
+      )
+      .slice(-(MINIMUM_CANDLE_COUNT - 1));
 
     const result = normalizeCandles(candles, "5m", now);
 
@@ -136,6 +143,109 @@ describe("normalizeCandles", () => {
     );
 
     expect(result.status).toBe("INSUFFICIENT_HISTORY");
+  });
+
+  it.each([
+    ["off-session", `2026-08-07T08:00:00${IST}`],
+    ["misaligned", `2026-08-07T09:17:00${IST}`],
+    ["weekend", `2026-08-08T09:15:00${IST}`],
+    ["exchange holiday", `2026-03-03T09:15:00${IST}`],
+  ])("rejects a %s intraday bar", (_name, time) => {
+    const result = normalizeCandles(
+      [candle(time)],
+      "5m",
+      new Date(`2026-08-07T16:00:00${IST}`),
+    );
+
+    expect(result).toMatchObject({ status: "INVALID_CANDLES", candles: [] });
+  });
+
+  it("accepts the maintained 2025 Muhurat special session instead of treating it as a holiday", () => {
+    const special = candle(`2025-10-21T13:45:00${IST}`);
+    const result = normalizeCandles(
+      [special],
+      "1h",
+      new Date(`2025-10-21T15:00:00${IST}`),
+    );
+
+    expect(result.candles).toEqual([
+      expect.objectContaining({ time: special.date.getTime() }),
+    ]);
+  });
+
+  it("flags dates outside the maintained calendar range as a data-quality limitation", () => {
+    const result = normalizeCandles(
+      [candle(`2027-01-04T09:15:00${IST}`)],
+      "5m",
+      new Date(`2027-01-04T10:00:00${IST}`),
+    );
+
+    expect(result).toMatchObject({
+      status: "DATA_QUALITY_LIMITATION",
+      candles: [],
+      adjustmentMode: "RAW",
+    });
+  });
+
+  it("back-adjusts every daily equity OHLC field from Yahoo adjclose provenance", () => {
+    const quote = candle(`2026-08-07T09:15:00${IST}`, {
+      open: 100,
+      high: 110,
+      low: 90,
+      close: 105,
+      adjclose: 52.5,
+    });
+
+    const result = normalizeCandles(
+      [quote],
+      "1d",
+      new Date(`2026-08-07T16:00:00${IST}`),
+      { adjustmentMode: "BACK_ADJUSTED" },
+    );
+
+    expect(result.adjustmentMode).toBe("BACK_ADJUSTED");
+    expect(result.candles).toEqual([
+      {
+        time: quote.date.getTime(),
+        open: 50,
+        high: 55,
+        low: 45,
+        close: 52.5,
+        volume: 1_000,
+      },
+    ]);
+  });
+
+  it("keeps intraday OHLC raw even when Yahoo includes adjclose", () => {
+    const quote = candle(`2026-08-07T09:15:00${IST}`, {
+      close: 103,
+      adjclose: 51.5,
+    });
+
+    const result = normalizeCandles(
+      [quote],
+      "5m",
+      new Date(`2026-08-07T09:20:00${IST}`),
+      { adjustmentMode: "RAW" },
+    );
+
+    expect(result.adjustmentMode).toBe("RAW");
+    expect(result.candles[0].close).toBe(103);
+  });
+
+  it("does not mix raw and adjusted equity candles when adjclose is unavailable", () => {
+    const result = normalizeCandles(
+      [candle(`2026-08-07T09:15:00${IST}`)],
+      "1d",
+      new Date(`2026-08-07T16:00:00${IST}`),
+      { adjustmentMode: "BACK_ADJUSTED" },
+    );
+
+    expect(result).toMatchObject({
+      status: "INVALID_CANDLES",
+      candles: [],
+      adjustmentMode: "BACK_ADJUSTED",
+    });
   });
 });
 

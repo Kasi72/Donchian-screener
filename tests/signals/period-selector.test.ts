@@ -68,7 +68,7 @@ describe("rules period selection", () => {
     // confirmed before the signal is evaluated.
     candles[29] = candle(29, 95.01, 109, 105);
 
-    const result = selectRulesPeriod(candles, 30);
+    const result = selectRulesPeriod(candles, 30, 0.05);
 
     expect(result.candidates.map(({ anchor, period }) => ({
       anchorIndex: anchor.index,
@@ -83,7 +83,7 @@ describe("rules period selection", () => {
   });
 
   it("selects the candidate with the highest frozen structural score", () => {
-    const result = selectRulesPeriod(candidateFixture(), 30);
+    const result = selectRulesPeriod(candidateFixture(), 30, 0.05);
 
     expect(result.candidates.map((candidate) => candidate.anchor.index)).toEqual([
       16,
@@ -94,14 +94,25 @@ describe("rules period selection", () => {
     );
     expect(result.selected?.anchor.index).toBe(16);
     expect(result.selected?.score).toBe(result.candidates[0].score);
+    expect(result.selected).toMatchObject({
+      scoreVersion: "structural-v1",
+      scoreComponents: {
+        prominence: expect.any(Number),
+        recovery: expect.any(Number),
+        recency: expect.any(Number),
+        retests: expect.any(Number),
+        relativeVolume: expect.any(Number),
+        higherTimeframeAgreement: 0,
+      },
+    });
   });
 
   it("does not let candles after the signal alter candidates or scores", () => {
     const candles = candidateFixture();
-    const before = selectRulesPeriod(candles, 30);
+    const before = selectRulesPeriod(candles, 30, 0.05);
     candles.push(candle(31, 1, 500, 400, 1_000_000));
 
-    expect(selectRulesPeriod(candles, 30)).toEqual(before);
+    expect(selectRulesPeriod(candles, 30, 0.05)).toEqual(before);
   });
 
   it("breaks score ties by raw prominence and then by the newer anchor", () => {
@@ -119,6 +130,15 @@ describe("rules period selection", () => {
       },
       period: 30 - index,
       score: 0.75,
+      scoreVersion: "structural-v1",
+      scoreComponents: {
+        prominence: 0.5,
+        recovery: 0.5,
+        recency: 0.5,
+        retests: 0,
+        relativeVolume: 0.5,
+        higherTimeframeAgreement: 0,
+      },
       currentLdc: 100,
       previousLdc: 90,
     });

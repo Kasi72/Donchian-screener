@@ -31,7 +31,7 @@ describe("Donchian lower channel", () => {
 
     expect(lowerChannel(candles, 51, 51)).toBe(101);
     expect(lowerChannel(candles, 50, 51)).toBe(90);
-    expect(bullishRollover(candles, 51, 51)).toEqual({
+    expect(bullishRollover(candles, 51, 51, 0.05)).toEqual({
       passed: true,
       currentLdc: 101,
       previousLdc: 90,
@@ -43,7 +43,7 @@ describe("Donchian lower channel", () => {
 
     expect(lowerChannel(candles, 94, 94)).toBe(101);
     expect(lowerChannel(candles, 93, 94)).toBe(90);
-    expect(bullishRollover(candles, 94, 94)).toEqual({
+    expect(bullishRollover(candles, 94, 94, 0.05)).toEqual({
       passed: true,
       currentLdc: 101,
       previousLdc: 90,
@@ -70,14 +70,14 @@ describe("Donchian lower channel", () => {
       candle(3, 100.10000000000001),
     ];
 
-    expect(bullishRollover(candles, 3, 3)).toEqual({
+    expect(bullishRollover(candles, 3, 3, 0.05)).toEqual({
       passed: true,
       currentLdc: 100.1,
       previousLdc: 90,
     });
 
     candles[3] = candle(3, 100.15);
-    expect(bullishRollover(candles, 3, 3).passed).toBe(false);
+    expect(bullishRollover(candles, 3, 3, 0.05).passed).toBe(false);
   });
 
   it("uses raw channel values for the rise even when both occupy the same tick", () => {
@@ -88,7 +88,7 @@ describe("Donchian lower channel", () => {
       candle(3, 100.12),
     ];
 
-    expect(bullishRollover(candles, 3, 3)).toEqual({
+    expect(bullishRollover(candles, 3, 3, 0.05)).toEqual({
       passed: true,
       currentLdc: 100.12,
       previousLdc: 100.11,
@@ -105,6 +105,6 @@ describe("Donchian lower channel", () => {
     expect(() => lowerChannel(candles, -1, 1)).toThrow(RangeError);
     expect(() => lowerChannel(candles, 3, 1)).toThrow(RangeError);
     expect(() => lowerChannel(candles, 1, 3)).toThrow(RangeError);
-    expect(() => bullishRollover(candles, 2, 3)).toThrow(RangeError);
+    expect(() => bullishRollover(candles, 2, 3, 0.05)).toThrow(RangeError);
   });
 });

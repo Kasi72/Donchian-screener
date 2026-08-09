@@ -1,6 +1,6 @@
 export interface UniverseInstrument {
   symbol: string;
-  yahooSymbol: string;
+  yahooSymbol?: string;
   companyName?: string;
   industry?: string;
   series?: string;

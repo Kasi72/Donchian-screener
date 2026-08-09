@@ -35,6 +35,16 @@ const BUY: BuyRecommendation = {
   anchorTime: Date.UTC(2026, 6, 28, 10),
   strategyVersion: "rules-v1",
   dataAsOf: Date.UTC(2026, 7, 7, 10, 5),
+  adjustmentMode: "BACK_ADJUSTED",
+  tickSize: 0.05,
+  tickPolicy: "nse-cm-legacy-0.05-v1",
+  reactionHigh: 1450,
+  rewardRisk: 2,
+  scoreVersion: "structural-v1",
+  score: 0.5705,
+  scoreComponents: { prominence: 0.5, recovery: 0.5, recency: 0.5, retests: 0.5, relativeVolume: 0.5, higherTimeframeAgreement: 0 },
+  higherTimeframeInput: "NEUTRAL_UNAVAILABLE",
+  anchorRationale: "Confirmed structural pivot selected causally.",
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -100,6 +110,26 @@ describe("ScanForm", () => {
     expect(screen.getByText("Scanning 2 instruments…")).toBeInTheDocument();
     expect(screen.queryByText(/Ready to scan/)).not.toBeInTheDocument();
     expect(screen.queryByText("Upload a stock list to begin.")).not.toBeInTheDocument();
+  });
+
+  it("lets the user cancel an active scan and return to the ready state", async () => {
+    const user = userEvent.setup();
+    const pendingScan = deferred<Response>();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(FIRST_PARSE))
+      .mockReturnValueOnce(pendingScan.promise);
+    render(<ScanForm />);
+
+    await user.upload(
+      screen.getByLabelText("Upload stock list"),
+      new File(["Symbol\nRELIANCE\nTCS"], "stocks.csv", { type: "text/csv" }),
+    );
+    await screen.findByText("2 valid instruments");
+    await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
+    await user.click(screen.getByRole("button", { name: "Cancel scan" }));
+
+    expect(screen.queryByText("Scanning 2 instruments…")).not.toBeInTheDocument();
+    expect(screen.getByText("Ready to scan 2 instruments.")).toBeInTheDocument();
   });
 
   it("clears results and disables export when the timeframe changes", async () => {

@@ -37,6 +37,13 @@ export function SignalDetails({
     ["Confirmed pivot anchor", dateFormatter.format(recommendation.anchorTime)],
     ["Yahoo symbol", recommendation.yahooSymbol],
     ["Candle timeframe", recommendation.timeframe],
+    ["Price adjustment", recommendation.adjustmentMode],
+    ["Tick size / policy", `${recommendation.tickSize} / ${recommendation.tickPolicy}`],
+    ["Reaction high", formatPrice(recommendation.reactionHigh)],
+    ["Planned reward/risk", recommendation.rewardRisk.toFixed(2)],
+    ["Structural score", `${recommendation.score.toFixed(4)} (${recommendation.scoreVersion})`],
+    ["Higher timeframe", "Neutral (input unavailable)"],
+    ["Anchor rationale", recommendation.anchorRationale],
     ["Strategy version", recommendation.strategyVersion],
   ];
 

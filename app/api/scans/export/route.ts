@@ -3,6 +3,12 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { ScanItemResult } from "@/lib/signals/scan-symbol";
+import {
+  MAX_EXPORT_BODY_BYTES,
+  MAX_EXPORT_ITEMS,
+  PayloadTooLargeError,
+  readBoundedJson,
+} from "@/lib/server/request-limits";
 
 const CSV_HEADERS = [
   "symbol",
@@ -22,6 +28,17 @@ const CSV_HEADERS = [
   "anchorTime",
   "strategyVersion",
   "dataAsOf",
+  "adjustmentMode",
+  "tickSize",
+  "tickPolicy",
+  "reactionHigh",
+  "rewardRisk",
+  "scoreVersion",
+  "score",
+  "higherTimeframeInput",
+  "anchorRationale",
+  "companyName",
+  "industry",
   "message",
 ] as const;
 
@@ -42,6 +59,29 @@ const recommendationSchema = z.object({
   anchorTime: z.number().finite(),
   strategyVersion: z.literal("rules-v1"),
   dataAsOf: z.number().finite(),
+  adjustmentMode: z.enum(["RAW", "BACK_ADJUSTED"]),
+  tickSize: z.number().positive().finite(),
+  tickPolicy: z.enum([
+    "nse-cm-price-band-2025-v1",
+    "nse-cm-legacy-0.05-v1",
+    "nse-index-metadata-v1",
+  ]),
+  reactionHigh: z.number().finite(),
+  rewardRisk: z.number().finite(),
+  scoreVersion: z.literal("structural-v1"),
+  score: z.number().finite(),
+  scoreComponents: z.object({
+    prominence: z.number().finite(),
+    recovery: z.number().finite(),
+    recency: z.number().finite(),
+    retests: z.number().finite(),
+    relativeVolume: z.number().finite(),
+    higherTimeframeAgreement: z.number().finite(),
+  }),
+  higherTimeframeInput: z.literal("NEUTRAL_UNAVAILABLE"),
+  anchorRationale: z.string(),
+  companyName: z.string().optional(),
+  industry: z.string().optional(),
 });
 
 const buyResultSchema = z.object({
@@ -62,6 +102,10 @@ const nonBuyResultSchema = z.object({
     "STALE_DATA",
     "INVALID_CANDLES",
     "PROVIDER_ERROR",
+    "DATA_QUALITY_LIMITATION",
+    "PROVIDER_TIMEOUT",
+    "INVALID_INSTRUMENT",
+    "TICK_SIZE_UNRESOLVED",
   ]),
   recommendation: z.never().optional(),
   message: z.string().optional(),
@@ -82,7 +126,7 @@ const resultSchema = z
     }
   });
 
-const exportRequestSchema = z.object({ results: z.array(resultSchema) });
+const exportRequestSchema = z.object({ results: z.array(resultSchema).max(MAX_EXPORT_ITEMS) });
 
 function escapeCsvCell(value: unknown): string {
   const text = value === null || value === undefined ? "" : String(value);
@@ -111,6 +155,17 @@ export function scanResultsToCsv(results: readonly ScanItemResult[]): string {
       anchorTime: recommendation?.anchorTime,
       strategyVersion: recommendation?.strategyVersion,
       dataAsOf: recommendation?.dataAsOf,
+      adjustmentMode: recommendation?.adjustmentMode,
+      tickSize: recommendation?.tickSize,
+      tickPolicy: recommendation?.tickPolicy,
+      reactionHigh: recommendation?.reactionHigh,
+      rewardRisk: recommendation?.rewardRisk,
+      scoreVersion: recommendation?.scoreVersion,
+      score: recommendation?.score,
+      higherTimeframeInput: recommendation?.higherTimeframeInput,
+      anchorRationale: recommendation?.anchorRationale,
+      companyName: recommendation?.companyName,
+      industry: recommendation?.industry,
       message: result.message,
     };
     return CSV_HEADERS.map((header) => escapeCsvCell(values[header])).join(",");
@@ -122,14 +177,22 @@ export function scanResultsToCsv(results: readonly ScanItemResult[]): string {
 export async function POST(request: Request): Promise<Response> {
   let body: unknown;
   try {
-    body = await request.json();
-  } catch {
+    body = await readBoundedJson(request, MAX_EXPORT_BODY_BYTES);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: "Export request is too large" }, { status: 413 });
+    }
     return NextResponse.json({ error: "Invalid export request" }, { status: 400 });
   }
 
   const parsed = exportRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid export request" }, { status: 400 });
+    const tooMany = Array.isArray((body as { results?: unknown })?.results) &&
+      (body as { results: unknown[] }).results.length > MAX_EXPORT_ITEMS;
+    return NextResponse.json(
+      { error: tooMany ? "Export has too many rows" : "Invalid export request" },
+      { status: tooMany ? 413 : 400 },
+    );
   }
 
   return new Response(scanResultsToCsv(parsed.data.results), {

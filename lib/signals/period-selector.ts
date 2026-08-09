@@ -12,6 +12,8 @@ export interface PeriodCandidate {
   anchor: PivotLow;
   period: number;
   score: number;
+  scoreVersion: typeof STRUCTURAL_SCORE_VERSION;
+  scoreComponents: StructuralScoreComponents;
   currentLdc: number;
   previousLdc: number;
 }
@@ -161,21 +163,25 @@ export function selectHighestPeriodCandidate(
 export function selectRulesPeriod(
   candles: Candle[],
   signalIndex: number,
+  tickSize: number,
 ): { selected?: PeriodCandidate; candidates: PeriodCandidate[] } {
   const anchors = findConfirmedPivotLows(candles, signalIndex);
   const candidates: PeriodCandidate[] = [];
 
   for (const anchor of anchors) {
     const period = signalIndex - anchor.index;
-    const rollover = bullishRollover(candles, signalIndex, period);
+    const rollover = bullishRollover(candles, signalIndex, period, tickSize);
     if (!rollover.passed) {
       continue;
     }
 
+    const score = structuralScore(candles, signalIndex, anchor);
     candidates.push({
       anchor,
       period,
-      score: structuralScore(candles, signalIndex, anchor).score,
+      score: score.score,
+      scoreVersion: score.version,
+      scoreComponents: score.components,
       currentLdc: rollover.currentLdc,
       previousLdc: rollover.previousLdc,
     });

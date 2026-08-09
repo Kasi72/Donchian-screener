@@ -15,12 +15,17 @@ export type CandleStatus =
   | "SYMBOL_NOT_FOUND"
   | "PROVIDER_RATE_LIMITED"
   | "STALE_DATA"
-  | "INVALID_CANDLES";
+  | "INVALID_CANDLES"
+  | "DATA_QUALITY_LIMITATION"
+  | "PROVIDER_TIMEOUT";
+
+export type AdjustmentMode = "RAW" | "BACK_ADJUSTED";
 
 export interface CandleResponse {
   status: CandleStatus;
   candles: Candle[];
   asOf: number;
+  adjustmentMode: AdjustmentMode;
 }
 
 export interface MarketDataProvider {
@@ -28,5 +33,11 @@ export interface MarketDataProvider {
     symbol: string,
     timeframe: Timeframe,
     now?: Date,
+    options?: MarketDataRequestOptions,
   ): Promise<CandleResponse>;
+}
+
+export interface MarketDataRequestOptions {
+  signal?: AbortSignal;
+  deadlineMs?: number;
 }
