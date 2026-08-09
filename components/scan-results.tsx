@@ -97,7 +97,7 @@ export function ScanResults({
   if (results !== previousResults) {
     const validIds = new Set(results.map((result, index) => rowId(result, index)));
     setPreviousResults(results);
-    setSelectedIds((current) => new Set([...current].filter((id) => validIds.has(id))));
+    setSelectedIds(new Set());
     if (detailsRowId && !validIds.has(detailsRowId)) {
       setDetailsRowId(undefined);
     }

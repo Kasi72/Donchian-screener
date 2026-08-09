@@ -174,6 +174,19 @@ describe("ScanResults", () => {
     expect(reports.at(-1)?.selected).toEqual([]);
   });
 
+  it("clears selection when a replacement result set reuses an existing row ID", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<ScanResults results={RESULTS} />);
+
+    await user.click(screen.getByRole("checkbox", { name: "Select RELIANCE" }));
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+
+    rerender(<ScanResults results={RESULTS.map((result) => ({ ...result }))} />);
+
+    expect(screen.getByText("0 selected")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Select RELIANCE" })).not.toBeChecked();
+  });
+
   it("selects all visible rows and exposes an indeterminate header checkbox", async () => {
     const user = userEvent.setup();
     render(<ScanResults results={RESULTS} />);
