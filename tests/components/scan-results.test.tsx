@@ -151,7 +151,7 @@ describe("ScanResults", () => {
     await user.type(screen.getByLabelText("Data as of from"), "2026-08-08");
     expect(screen.getByText("No results visible")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    await user.click(screen.getByRole("button", { name: "Clear table filters" }));
     expect(screen.getByText("5 results visible")).toBeInTheDocument();
   });
 

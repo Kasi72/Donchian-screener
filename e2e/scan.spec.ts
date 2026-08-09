@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -28,6 +29,36 @@ async function scanAtOneHour(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Scan for BUY signals" }).click();
   await expect(page.getByText("Scan complete: 1 BUY signal across 3 results.")).toBeVisible();
 }
+
+async function readDownloadedCsv(page: Page, buttonName: string, filename: string): Promise<string> {
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: buttonName }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(filename);
+  const downloadedPath = await download.path();
+  expect(downloadedPath).not.toBeNull();
+  return readFile(downloadedPath!, "utf8");
+}
+
+test("persists an explicit dark theme and follows the system color scheme", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/");
+
+  const root = page.locator("html");
+  await expect(page.getByRole("radio", { name: "System" })).toBeChecked();
+  await expect(root).toHaveAttribute("data-theme", "light");
+
+  await page.getByText("Dark", { exact: true }).click();
+  await expect(root).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "Dark" })).toBeChecked();
+  await expect(root).toHaveAttribute("data-theme", "dark");
+
+  await page.getByText("System", { exact: true }).click();
+  await expect(root).toHaveAttribute("data-theme", "light");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(root).toHaveAttribute("data-theme", "dark");
+});
 
 test("completes the deterministic mixed-result flow and exports its exact CSV", async ({
   page,
@@ -93,13 +124,11 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
   await expect(details).toContainText("Previous Donchian low₹90.00");
   await expect(details).toContainText("Strategy versionrules-v1");
 
-  const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export results" }).click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe("scan-results.csv");
-  const downloadedPath = await download.path();
-  expect(downloadedPath).not.toBeNull();
-  const downloadedCsv = await readFile(downloadedPath!, "utf8");
+  const downloadedCsv = await readDownloadedCsv(
+    page,
+    "Export filtered (3)",
+    "scan-results-filtered.csv",
+  );
   expect(downloadedCsv).toBe(
     [
       "symbol,yahooSymbol,timeframe,status,recommendation,signalTime,autoPeriod,probability,entry,stop,target1,target2,currentLdc,previousLdc,anchorTime,strategyVersion,dataAsOf,adjustmentMode,tickSize,tickPolicy,reactionHigh,rewardRisk,scoreVersion,score,higherTimeframeInput,anchorRationale,companyName,industry,message",
@@ -119,9 +148,107 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
     "1 valid instrument",
   );
   await expect(table).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Export results" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Export filtered (0)" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Export selected (0)" })).toBeDisabled();
   await expect(page.getByText("Ready to scan 1 instrument.")).toBeVisible();
   expect(runtimeErrors).toEqual([]);
+});
+
+test("sorts, combines filters, preserves details, and exports the intended rows", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await uploadPrimaryUniverse(page);
+  await scanAtOneHour(page);
+
+  const table = page.getByRole("table", { name: "Scan results" });
+  const instrumentSort = page.getByRole("button", { name: "Sort by Instrument" });
+  const instrumentHeader = instrumentSort.locator("xpath=..");
+  const instruments = table.locator("tbody > tr:not(.details-row) > .instrument-column");
+
+  await instrumentSort.click();
+  await expect(instrumentHeader).toHaveAttribute("aria-sort", "ascending");
+  await expect(instruments).toHaveText(["BROKEN", "RELIANCE", "TCS"]);
+  await instrumentSort.click();
+  await expect(instrumentHeader).toHaveAttribute("aria-sort", "descending");
+  await expect(instruments).toHaveText(["TCS", "RELIANCE", "BROKEN"]);
+
+  await page
+    .getByRole("button", { name: "Show calculation details for RELIANCE" })
+    .click();
+  const details = page.getByRole("region", { name: "Calculation details for RELIANCE" });
+  await expect(details).toBeVisible();
+  expect(
+    await details.evaluate(
+      (element) => element.closest("tr")?.previousElementSibling?.textContent?.includes("RELIANCE"),
+    ),
+  ).toBe(true);
+
+  await page.getByLabel("Instrument filter").fill("reli");
+  await page.getByLabel("Status filter").fill("buy");
+  await page.getByLabel("Minimum Entry").fill("100");
+  await page.getByLabel("Maximum Entry").fill("103");
+  await page.getByLabel("Data as of from").fill("2026-08-07");
+  await page.getByLabel("Data as of to").fill("2026-08-07");
+  await expect(instruments).toHaveText(["RELIANCE"]);
+  await expect(page.getByText("1 result visible", { exact: true })).toBeVisible();
+
+  await page.getByRole("checkbox", { name: "Select RELIANCE" }).check();
+  await expect(page.getByText("1 selected", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Clear table filters" }).click();
+  await page.getByLabel("Instrument filter").fill("BROKEN");
+  await expect(instruments).toHaveText(["BROKEN"]);
+
+  const selectAllVisible = page.getByRole("checkbox", { name: "Select all visible results" });
+  await selectAllVisible.check();
+  await expect(selectAllVisible).toBeChecked();
+  await expect(page.getByText("2 selected", { exact: true })).toBeVisible();
+
+  const selectedCsv = await readDownloadedCsv(
+    page,
+    "Export selected (2)",
+    "scan-results-selected.csv",
+  );
+  expect(selectedCsv).toContain("RELIANCE,RELIANCE.NS,1h,BUY");
+  expect(selectedCsv).toContain("BROKEN,,,PROVIDER_ERROR");
+  expect(selectedCsv).not.toContain("TCS,,,NO_SIGNAL");
+
+  const filteredCsv = await readDownloadedCsv(
+    page,
+    "Export filtered (1)",
+    "scan-results-filtered.csv",
+  );
+  expect(filteredCsv).toContain("BROKEN,,,PROVIDER_ERROR");
+  expect(filteredCsv).not.toContain("RELIANCE,RELIANCE.NS,1h,BUY");
+  expect(filteredCsv).not.toContain("TCS,,,NO_SIGNAL");
+
+  await page.getByRole("button", { name: "Clear table filters" }).click();
+  await page.getByText("Dark", { exact: true }).click();
+  await page.screenshot({
+    fullPage: true,
+    path: resolve(
+      ".superpowers/sdd/2026-08-09-dark-sortable-selectable-results/desktop-dark.png",
+    ),
+  });
+
+  expect((await instrumentSort.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  expect((await page.getByLabel("Instrument filter").boundingBox())?.height).toBeGreaterThanOrEqual(
+    44,
+  );
+  expect(
+    (await page.getByRole("button", { name: "Clear table filters" }).boundingBox())?.height,
+  ).toBeGreaterThanOrEqual(44);
+  const selectAllTarget = selectAllVisible.locator("xpath=ancestor::label");
+  expect((await selectAllTarget.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+
+  const overflow = await page.evaluate(() => ({
+    document: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    table: (() => {
+      const region = document.querySelector<HTMLElement>(".table-scroll");
+      return region !== null && region.scrollWidth > region.clientWidth;
+    })(),
+  }));
+  expect(overflow).toEqual({ document: false, table: false });
 });
 
 test("keeps mobile controls, summary, results, and model explanation in rendered order", async ({
@@ -131,6 +258,7 @@ test("keeps mobile controls, summary, results, and model explanation in rendered
   await page.goto("/");
   await uploadPrimaryUniverse(page);
   await scanAtOneHour(page);
+  const table = page.getByRole("table", { name: "Scan results" });
 
   const orderedSelectors = [
     ".intro h1",
@@ -167,6 +295,23 @@ test("keeps mobile controls, summary, results, and model explanation in rendered
   }));
   expect(overflow).toEqual({ document: false, table: true });
 
+  const tableScroll = page.getByRole("region", { name: "Scrollable scan results" });
+  await tableScroll.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  const selectionColumnBox = await table
+    .locator("thead .selection-column")
+    .boundingBox();
+  const instrumentColumnBox = await table
+    .locator("thead .instrument-column")
+    .boundingBox();
+  expect(instrumentColumnBox!.x).toBeGreaterThanOrEqual(
+    selectionColumnBox!.x + selectionColumnBox!.width,
+  );
+  await tableScroll.evaluate((element) => {
+    element.scrollLeft = 0;
+  });
+
   const rejectedRowsTarget = await page
     .getByText("Review rejected rows", { exact: true })
     .boundingBox();
@@ -176,4 +321,11 @@ test("keeps mobile controls, summary, results, and model explanation in rendered
     .getByRole("button", { name: "Show calculation details for RELIANCE" })
     .boundingBox();
   expect(detailsTarget?.height).toBeGreaterThanOrEqual(44);
+
+  await page.screenshot({
+    fullPage: true,
+    path: resolve(
+      ".superpowers/sdd/2026-08-09-dark-sortable-selectable-results/mobile-390px.png",
+    ),
+  });
 });

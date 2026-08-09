@@ -233,7 +233,7 @@ export function ScanResults({
             />
           </label>
         </div>
-        <button className="table-action" type="button" onClick={() => setFilters({})}>Clear filters</button>
+        <button className="table-action" type="button" onClick={() => setFilters({})}>Clear table filters</button>
         <p className="table-count" aria-live="polite">
           {projectedResults.length === 0 ? "No results visible" : `${projectedResults.length} result${projectedResults.length === 1 ? "" : "s"} visible`}
         </p>
@@ -246,13 +246,15 @@ export function ScanResults({
           <thead>
             <tr>
               <th scope="col" className="selection-column">
-                <input
-                  ref={selectAllRef}
-                  type="checkbox"
-                  aria-label="Select all visible results"
-                  checked={allVisibleSelected}
-                  onChange={toggleAllVisible}
-                />
+                <label className="selection-control">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    aria-label="Select all visible results"
+                    checked={allVisibleSelected}
+                    onChange={toggleAllVisible}
+                  />
+                </label>
               </th>
               {COLUMNS.map(({ column, label, numeric }) => (
                 <th key={column} scope="col" className={`${column === "symbol" ? "instrument-column" : ""}${numeric ? " number-cell" : ""}`} aria-sort={sortLabel(sort, column)}>
@@ -276,12 +278,14 @@ export function ScanResults({
                 <SignalDetails.RowGroup key={id}>
                   <tr className={result.status === "BUY" ? "buy-row" : undefined}>
                     <td className="selection-column">
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${result.symbol}`}
-                        checked={isSelected}
-                        onChange={() => toggleRow(id)}
-                      />
+                      <label className="selection-control">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${result.symbol}`}
+                          checked={isSelected}
+                          onChange={() => toggleRow(id)}
+                        />
+                      </label>
                     </td>
                     <th scope="row" className="instrument-column">{result.symbol}</th>
                     <td className={result.status === "BUY" ? "buy-status" : "status-copy"}>{statusText(result)}</td>

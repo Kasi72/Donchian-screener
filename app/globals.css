@@ -444,7 +444,7 @@ select:disabled {
 
 .results-toolbar input {
   min-width: 112px;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 8px;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
@@ -461,7 +461,7 @@ select:disabled {
 }
 
 .table-action {
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 10px;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
@@ -482,7 +482,7 @@ select:disabled {
 }
 
 .sort-button {
-  min-height: 32px;
+  min-height: 44px;
   padding: 0;
   color: var(--muted);
   font-size: inherit;
@@ -496,6 +496,8 @@ select:disabled {
 .selection-column {
   width: 48px;
   min-width: 48px;
+  padding-right: 2px;
+  padding-left: 2px;
   position: sticky;
   left: 0;
   z-index: 2;
@@ -519,6 +521,15 @@ input[type="checkbox"] {
   width: 18px;
   height: 18px;
   accent-color: var(--buy);
+}
+
+.selection-control {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 table {

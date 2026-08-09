@@ -1,7 +1,7 @@
 # Dark theme and interactive results table design
 
 Date: 2026-08-09  
-Status: approved in conversation; awaiting written-spec review
+Status: implemented
 
 ## Objective
 

@@ -120,6 +120,10 @@ Open [http://localhost:3000](http://localhost:3000), upload a CSV, choose a time
 
 No application secrets or environment variables are required.
 
+### Theme
+
+Use the **Light**, **Dark**, or **System** control in the header. Light and Dark remain selected after a reload. System follows the operating-system color preference, including changes made while the page is open.
+
 ### Production build
 
 ```bash
@@ -150,6 +154,14 @@ Every uploaded instrument receives a row. A missing BUY is not silently discarde
 | `PROVIDER_ERROR` | Unexpected provider or evaluation failure isolated to that symbol |
 
 Expand **Details** on a BUY row to review the precise Donchian values, selected anchor, adjustment mode, tick size and policy, structural score, reward/risk, strategy version, and data timestamp.
+
+### Sorting, filtering, selection, and export
+
+- Select a sortable column heading to sort ascending; select it again to sort descending. The arrow and accessible sort state identify the active direction.
+- Combine instrument, status, numeric minimum/maximum, and data-as-of date filters. **Clear table filters** restores every result.
+- Select individual rows, or use the header checkbox to select or clear all rows currently visible. A selection remains active when a filter temporarily hides it; **Clear selection** removes all selections.
+- **Export filtered** downloads the rows currently visible in their displayed order. **Export selected** downloads every selected row, including selected rows hidden by the current table filters.
+- On narrow screens, scroll the results table horizontally. The page itself remains fixed-width while the selection and instrument columns stay pinned for context.
 
 ## Data integrity and operational safeguards
 
