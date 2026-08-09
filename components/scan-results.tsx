@@ -75,6 +75,10 @@ function sortLabel(sort: SortState | null, column: ResultColumn): "ascending" | 
   return sort.direction === "asc" ? "ascending" : "descending";
 }
 
+function hasSameResultObjects(previous: ScanItemResult[], next: ScanItemResult[]): boolean {
+  return previous.length === next.length && previous.every((result, index) => result === next[index]);
+}
+
 export interface ScanResultsProjection {
   filtered: ScanItemResult[];
   selected: ScanItemResult[];
@@ -97,7 +101,9 @@ export function ScanResults({
   if (results !== previousResults) {
     const validIds = new Set(results.map((result, index) => rowId(result, index)));
     setPreviousResults(results);
-    setSelectedIds(new Set());
+    if (!hasSameResultObjects(previousResults, results)) {
+      setSelectedIds(new Set());
+    }
     if (detailsRowId && !validIds.has(detailsRowId)) {
       setDetailsRowId(undefined);
     }

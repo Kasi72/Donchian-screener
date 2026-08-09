@@ -187,6 +187,17 @@ describe("ScanResults", () => {
     expect(screen.getByRole("checkbox", { name: "Select RELIANCE" })).not.toBeChecked();
   });
 
+  it("retains selection when a fresh array contains the same result objects", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<ScanResults results={RESULTS} />);
+
+    await user.click(screen.getByRole("checkbox", { name: "Select RELIANCE" }));
+    rerender(<ScanResults results={[...RESULTS]} />);
+
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Select RELIANCE" })).toBeChecked();
+  });
+
   it("selects all visible rows and exposes an indeterminate header checkbox", async () => {
     const user = userEvent.setup();
     render(<ScanResults results={RESULTS} />);
