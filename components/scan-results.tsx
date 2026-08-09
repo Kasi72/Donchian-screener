@@ -1,8 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { SignalDetails } from "@/components/signal-details";
+import {
+  projectResults,
+  rowId,
+  type ResultColumn,
+  type SortState,
+  type TableFilters,
+} from "@/lib/results/table-state";
 import type { ScanItemResult } from "@/lib/signals/scan-symbol";
 
 const STATUS_LABELS: Record<ScanItemResult["status"], string> = {
@@ -34,6 +41,25 @@ const priceFormatter = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
+const COLUMNS: Array<{ column: ResultColumn; label: string; numeric?: boolean }> = [
+  { column: "symbol", label: "Instrument" },
+  { column: "status", label: "Status" },
+  { column: "entry", label: "Entry reference", numeric: true },
+  { column: "stop", label: "Stop", numeric: true },
+  { column: "target1", label: "Target 1", numeric: true },
+  { column: "target2", label: "Target 2", numeric: true },
+  { column: "autoPeriod", label: "Auto period", numeric: true },
+  { column: "dataAsOf", label: "Data as of" },
+];
+
+const NUMERIC_FILTERS: Array<{ min: keyof TableFilters; max: keyof TableFilters; label: string }> = [
+  { min: "minEntry", max: "maxEntry", label: "Entry" },
+  { min: "minStop", max: "maxStop", label: "Stop" },
+  { min: "minTarget1", max: "maxTarget1", label: "Target 1" },
+  { min: "minTarget2", max: "maxTarget2", label: "Target 2" },
+  { min: "minAutoPeriod", max: "maxAutoPeriod", label: "Auto period" },
+];
+
 function formatPrice(value: number | undefined): string {
   return value === undefined ? "—" : priceFormatter.format(value);
 }
@@ -42,83 +68,250 @@ function statusText(result: ScanItemResult): string {
   return result.message ?? STATUS_LABELS[result.status];
 }
 
-export function ScanResults({ results }: { results: ScanItemResult[] }) {
-  const [selectedSymbol, setSelectedSymbol] = useState<string>();
+function sortLabel(sort: SortState | null, column: ResultColumn): "ascending" | "descending" | undefined {
+  if (sort?.column !== column) {
+    return undefined;
+  }
+  return sort.direction === "asc" ? "ascending" : "descending";
+}
+
+export interface ScanResultsProjection {
+  filtered: ScanItemResult[];
+  selected: ScanItemResult[];
+}
+
+export function ScanResults({
+  results,
+  onProjectionChange,
+}: {
+  results: ScanItemResult[];
+  onProjectionChange?: (projection: ScanResultsProjection) => void;
+}) {
+  const [filters, setFilters] = useState<TableFilters>({});
+  const [sort, setSort] = useState<SortState | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [detailsRowId, setDetailsRowId] = useState<string>();
+  const [previousResults, setPreviousResults] = useState(results);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  if (results !== previousResults) {
+    const validIds = new Set(results.map((result, index) => rowId(result, index)));
+    setPreviousResults(results);
+    setSelectedIds((current) => new Set([...current].filter((id) => validIds.has(id))));
+    if (detailsRowId && !validIds.has(detailsRowId)) {
+      setDetailsRowId(undefined);
+    }
+  }
+
+  const projectedResults = useMemo(
+    () => projectResults(results, filters, sort),
+    [filters, results, sort],
+  );
+  const selectedResults = useMemo(
+    () => results.filter((result, index) => selectedIds.has(rowId(result, index))),
+    [results, selectedIds],
+  );
+  const visibleIds = useMemo(() => projectedResults.map(({ id }) => id), [projectedResults]);
+  const selectedVisibleCount = visibleIds.filter((id) => selectedIds.has(id)).length;
+  const allVisibleSelected = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+  const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someVisibleSelected;
+    }
+  }, [someVisibleSelected]);
+
+  useEffect(() => {
+    onProjectionChange?.({
+      filtered: projectedResults.map(({ result }) => result),
+      selected: selectedResults,
+    });
+  }, [onProjectionChange, projectedResults, selectedResults]);
+
+  function setFilterValue(field: keyof TableFilters, value: string) {
+    setFilters((current) => ({ ...current, [field]: value }));
+  }
+
+  function toggleSort(column: ResultColumn) {
+    setSort((current) => ({
+      column,
+      direction: current?.column === column && current.direction === "asc" ? "desc" : "asc",
+    }));
+  }
+
+  function toggleRow(rowKey: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(rowKey)) {
+        next.delete(rowKey);
+      } else {
+        next.add(rowKey);
+      }
+      return next;
+    });
+  }
+
+  function toggleAllVisible() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const id of visibleIds) {
+        if (allVisibleSelected) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+      }
+      return next;
+    });
+  }
 
   return (
-    <div className="table-scroll" role="region" tabIndex={0} aria-label="Scrollable scan results">
-      <table aria-label="Scan results">
-        <thead>
-          <tr>
-            <th scope="col">Instrument</th>
-            <th scope="col">Status</th>
-            <th scope="col" className="number-cell">Entry reference</th>
-            <th scope="col" className="number-cell">Stop</th>
-            <th scope="col" className="number-cell">Target 1</th>
-            <th scope="col" className="number-cell">Target 2</th>
-            <th scope="col" className="number-cell">Auto period</th>
-            <th scope="col">Data as of</th>
-            <th scope="col" aria-label="Calculation details" />
-          </tr>
-        </thead>
-        <tbody>
-          {results.map((result, index) => {
-            const recommendation = result.recommendation;
-            const rowKey = `${result.symbol}-${index}`;
-            const detailsId = `details-${index}`;
-            const triggerId = `details-trigger-${index}`;
-            const isSelected = selectedSymbol === rowKey;
+    <div className="results-table">
+      <section className="results-toolbar" aria-label="Filter scan results">
+        <div className="toolbar-field">
+          <label htmlFor="filter-symbol">Instrument filter</label>
+          <input
+            id="filter-symbol"
+            type="search"
+            value={filters.symbol ?? ""}
+            onChange={(event) => setFilterValue("symbol", event.target.value)}
+          />
+        </div>
+        <div className="toolbar-field">
+          <label htmlFor="filter-status">Status filter</label>
+          <input
+            id="filter-status"
+            type="search"
+            value={filters.status ?? ""}
+            onChange={(event) => setFilterValue("status", event.target.value)}
+          />
+        </div>
+        {NUMERIC_FILTERS.map(({ min, max, label }) => (
+          <div className="toolbar-range" key={label}>
+            <label>
+              Minimum {label}
+              <input
+                type="number"
+                inputMode="decimal"
+                value={String(filters[min] ?? "")}
+                onChange={(event) => setFilterValue(min, event.target.value)}
+              />
+            </label>
+            <label>
+              Maximum {label}
+              <input
+                type="number"
+                inputMode="decimal"
+                value={String(filters[max] ?? "")}
+                onChange={(event) => setFilterValue(max, event.target.value)}
+              />
+            </label>
+          </div>
+        ))}
+        <div className="toolbar-range">
+          <label>
+            Data as of from
+            <input
+              type="date"
+              value={String(filters.dataAsOfFrom ?? "")}
+              onChange={(event) => setFilterValue("dataAsOfFrom", event.target.value)}
+            />
+          </label>
+          <label>
+            Data as of to
+            <input
+              type="date"
+              value={String(filters.dataAsOfTo ?? "")}
+              onChange={(event) => setFilterValue("dataAsOfTo", event.target.value)}
+            />
+          </label>
+        </div>
+        <button className="table-action" type="button" onClick={() => setFilters({})}>Clear filters</button>
+        <p className="table-count" aria-live="polite">
+          {projectedResults.length === 0 ? "No results visible" : `${projectedResults.length} result${projectedResults.length === 1 ? "" : "s"} visible`}
+        </p>
+        <p className="table-count" aria-live="polite">{selectedResults.length} selected</p>
+        <button className="table-action" type="button" onClick={() => setSelectedIds(new Set())}>Clear selection</button>
+      </section>
 
-            return (
-              <SignalDetails.RowGroup key={rowKey}>
-                <tr className={result.status === "BUY" ? "buy-row" : undefined}>
-                  <th scope="row">{result.symbol}</th>
-                  <td className={result.status === "BUY" ? "buy-status" : "status-copy"}>
-                    {statusText(result)}
-                  </td>
-                  <td className="number-cell">{formatPrice(recommendation?.entry)}</td>
-                  <td className="number-cell">{formatPrice(recommendation?.stop)}</td>
-                  <td className="number-cell">{formatPrice(recommendation?.target1)}</td>
-                  <td className="number-cell">{formatPrice(recommendation?.target2)}</td>
-                  <td className="number-cell">{recommendation?.autoPeriod ?? "—"}</td>
-                  <td>
-                    {recommendation ? (
-                      <time dateTime={new Date(recommendation.dataAsOf).toISOString()}>
-                        {dateFormatter.format(recommendation.dataAsOf)}
-                      </time>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td>
-                    {recommendation ? (
-                      <button
-                        id={triggerId}
-                        className="details-button"
-                        type="button"
-                        aria-expanded={isSelected}
-                        aria-controls={detailsId}
-                        aria-label={`${isSelected ? "Hide" : "Show"} calculation details for ${result.symbol}`}
-                        onClick={() => setSelectedSymbol(isSelected ? undefined : rowKey)}
-                      >
-                        {isSelected ? "Hide" : "Details"}
-                      </button>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                </tr>
-                {recommendation && isSelected ? (
-                  <SignalDetails
-                    id={detailsId}
-                    recommendation={recommendation}
-                  />
-                ) : null}
-              </SignalDetails.RowGroup>
-            );
-          })}
-        </tbody>
-      </table>
+      <div className="table-scroll" role="region" tabIndex={0} aria-label="Scrollable scan results">
+        <table aria-label="Scan results">
+          <thead>
+            <tr>
+              <th scope="col" className="selection-column">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  aria-label="Select all visible results"
+                  checked={allVisibleSelected}
+                  onChange={toggleAllVisible}
+                />
+              </th>
+              {COLUMNS.map(({ column, label, numeric }) => (
+                <th key={column} scope="col" className={`${column === "symbol" ? "instrument-column" : ""}${numeric ? " number-cell" : ""}`} aria-sort={sortLabel(sort, column)}>
+                  <button className="sort-button" type="button" onClick={() => toggleSort(column)} aria-label={`Sort by ${label}`}>
+                    {label} {sort?.column === column ? (sort.direction === "asc" ? "↑" : "↓") : null}
+                  </button>
+                </th>
+              ))}
+              <th scope="col" aria-label="Calculation details" />
+            </tr>
+          </thead>
+          <tbody>
+            {projectedResults.map(({ id, result }) => {
+              const recommendation = result.recommendation;
+              const detailsId = `details-${id}`;
+              const triggerId = `details-trigger-${id}`;
+              const isDetailsOpen = detailsRowId === id;
+              const isSelected = selectedIds.has(id);
+
+              return (
+                <SignalDetails.RowGroup key={id}>
+                  <tr className={result.status === "BUY" ? "buy-row" : undefined}>
+                    <td className="selection-column">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${result.symbol}`}
+                        checked={isSelected}
+                        onChange={() => toggleRow(id)}
+                      />
+                    </td>
+                    <th scope="row" className="instrument-column">{result.symbol}</th>
+                    <td className={result.status === "BUY" ? "buy-status" : "status-copy"}>{statusText(result)}</td>
+                    <td className="number-cell">{formatPrice(recommendation?.entry)}</td>
+                    <td className="number-cell">{formatPrice(recommendation?.stop)}</td>
+                    <td className="number-cell">{formatPrice(recommendation?.target1)}</td>
+                    <td className="number-cell">{formatPrice(recommendation?.target2)}</td>
+                    <td className="number-cell">{recommendation?.autoPeriod ?? "—"}</td>
+                    <td>
+                      {recommendation ? (
+                        <time dateTime={new Date(recommendation.dataAsOf).toISOString()}>{dateFormatter.format(recommendation.dataAsOf)}</time>
+                      ) : "—"}
+                    </td>
+                    <td>
+                      {recommendation ? (
+                        <button
+                          id={triggerId}
+                          className="details-button"
+                          type="button"
+                          aria-expanded={isDetailsOpen}
+                          aria-controls={detailsId}
+                          aria-label={`${isDetailsOpen ? "Hide" : "Show"} calculation details for ${result.symbol}`}
+                          onClick={() => setDetailsRowId(isDetailsOpen ? undefined : id)}
+                        >
+                          {isDetailsOpen ? "Hide" : "Details"}
+                        </button>
+                      ) : "—"}
+                    </td>
+                  </tr>
+                  {recommendation && isDetailsOpen ? <SignalDetails id={detailsId} recommendation={recommendation} /> : null}
+                </SignalDetails.RowGroup>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

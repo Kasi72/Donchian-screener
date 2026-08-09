@@ -112,4 +112,90 @@ describe("ScanResults", () => {
     expect(details).toHaveTextContent("Planned reward/risk2.00");
     expect(details).toHaveTextContent("Anchor rationaleConfirmed structural pivot selected causally.");
   });
+
+  it("sorts a column in ascending then descending order", async () => {
+    const user = userEvent.setup();
+    render(<ScanResults results={RESULTS} />);
+
+    const sortButton = screen.getByRole("button", { name: "Sort by Instrument" });
+    await user.click(sortButton);
+
+    expect(sortButton.closest("th")).toHaveAttribute("aria-sort", "ascending");
+    expect(document.querySelector("tbody > tr")?.textContent).toContain("BROKEN");
+
+    await user.click(sortButton);
+
+    expect(sortButton.closest("th")).toHaveAttribute("aria-sort", "descending");
+    expect(document.querySelector("tbody > tr")?.textContent).toContain("TCS");
+  });
+
+  it("filters by instrument, status, numeric value, and date before clearing filters", async () => {
+    const user = userEvent.setup();
+    render(<ScanResults results={RESULTS} />);
+
+    await user.type(screen.getByLabelText("Instrument filter"), "reli");
+    expect(screen.getByText("1 result visible")).toBeInTheDocument();
+    expect(screen.getByText("RELIANCE")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Instrument filter"));
+    await user.type(screen.getByLabelText("Status filter"), "rate limited");
+    expect(screen.getByText("SBIN")).toBeInTheDocument();
+    expect(screen.getByText("1 result visible")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Status filter"));
+    await user.type(screen.getByLabelText("Minimum Entry"), "1400");
+    expect(screen.getByText("RELIANCE")).toBeInTheDocument();
+    expect(screen.getByText("1 result visible")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Minimum Entry"));
+    await user.type(screen.getByLabelText("Data as of from"), "2026-08-08");
+    expect(screen.getByText("No results visible")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.getByText("5 results visible")).toBeInTheDocument();
+  });
+
+  it("selects visible rows, preserves hidden selections, and reports selections in input order", async () => {
+    const user = userEvent.setup();
+    const reports: Array<{ filtered: ScanItemResult[]; selected: ScanItemResult[] }> = [];
+    render(<ScanResults results={RESULTS} onProjectionChange={(projection) => reports.push(projection)} />);
+
+    await user.click(screen.getByRole("checkbox", { name: "Select RELIANCE" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select TCS" }));
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+    expect(reports.at(-1)?.selected.map(({ symbol }) => symbol)).toEqual(["RELIANCE", "TCS"]);
+
+    await user.type(screen.getByLabelText("Instrument filter"), "TCS");
+    expect(screen.getByText("1 result visible")).toBeInTheDocument();
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear selection" }));
+    expect(screen.getByText("0 selected")).toBeInTheDocument();
+    expect(reports.at(-1)?.selected).toEqual([]);
+  });
+
+  it("selects all visible rows and exposes an indeterminate header checkbox", async () => {
+    const user = userEvent.setup();
+    render(<ScanResults results={RESULTS} />);
+
+    const allVisible = screen.getByRole("checkbox", { name: "Select all visible results" });
+    await user.click(allVisible);
+    expect(screen.getByText("5 selected")).toBeInTheDocument();
+    expect(allVisible).toBeChecked();
+
+    await user.click(screen.getByRole("checkbox", { name: "Select RELIANCE" }));
+    expect(screen.getByText("4 selected")).toBeInTheDocument();
+    expect(allVisible).not.toBeChecked();
+    expect((allVisible as HTMLInputElement).indeterminate).toBe(true);
+  });
+
+  it("keeps calculation details associated with the correct row after sorting", async () => {
+    const user = userEvent.setup();
+    render(<ScanResults results={RESULTS} />);
+
+    await user.click(screen.getByRole("button", { name: "Sort by Instrument" }));
+    await user.click(screen.getByRole("button", { name: "Show calculation details for RELIANCE" }));
+
+    expect(screen.getByRole("region", { name: "Calculation details for RELIANCE" })).toBeInTheDocument();
+  });
 });

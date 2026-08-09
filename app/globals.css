@@ -408,6 +408,119 @@ select:disabled {
   border-bottom: 1px solid var(--border-strong);
 }
 
+.results-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px 14px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-elevated);
+}
+
+.toolbar-field,
+.toolbar-range {
+  display: flex;
+  gap: 8px;
+}
+
+.toolbar-field {
+  flex-direction: column;
+}
+
+.toolbar-field label,
+.toolbar-range label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.toolbar-range label {
+  display: grid;
+  gap: 4px;
+}
+
+.results-toolbar input {
+  min-width: 112px;
+  min-height: 38px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--input);
+}
+
+.table-action,
+.sort-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.table-action {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  font-weight: 700;
+}
+
+.table-action:hover,
+.sort-button:hover {
+  color: var(--buy-dark);
+}
+
+.table-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sort-button {
+  min-height: 32px;
+  padding: 0;
+  color: var(--muted);
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+  white-space: nowrap;
+}
+
+.selection-column {
+  width: 48px;
+  min-width: 48px;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  text-align: center;
+}
+
+thead .selection-column,
+thead .instrument-column {
+  background: var(--surface);
+}
+
+.instrument-column {
+  position: sticky;
+  left: 48px;
+  z-index: 1;
+  background: var(--surface);
+}
+
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--buy);
+}
+
 table {
   width: 100%;
   min-width: 1040px;
@@ -530,6 +643,15 @@ tbody tr:last-child > * {
 
   .details-region dl {
     grid-template-columns: repeat(2, minmax(150px, 1fr));
+  }
+
+  .results-toolbar {
+    align-items: stretch;
+  }
+
+  .toolbar-field,
+  .toolbar-range {
+    flex: 1 1 180px;
   }
 }
 
