@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -63,6 +63,28 @@ describe("ThemeSelector", () => {
     expect(screen.getByRole("radio", { name: "Light" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Dark" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "System" })).toBeChecked();
+  });
+
+  it("moves radio selection and focus with Arrow, Home, and End keys", () => {
+    render(<ThemeSelector />);
+
+    const light = screen.getByRole("radio", { name: "Light" });
+    const dark = screen.getByRole("radio", { name: "Dark" });
+    const system = screen.getByRole("radio", { name: "System" });
+    system.focus();
+
+    fireEvent.keyDown(system, { key: "Home" });
+    expect(light).toBeChecked();
+    expect(light).toHaveFocus();
+
+    fireEvent.keyDown(light, { key: "ArrowRight" });
+    expect(dark).toBeChecked();
+    expect(dark).toHaveFocus();
+
+    fireEvent.keyDown(dark, { key: "End" });
+    expect(system).toBeChecked();
+    expect(system).toHaveFocus();
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("system");
   });
 
   it("persists an explicit choice and applies it to the document", async () => {

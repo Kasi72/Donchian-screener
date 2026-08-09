@@ -107,6 +107,10 @@ input[type="file"] {
 }
 
 .theme-option {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
   min-width: 58px;
   padding: 0 10px;
   border: 1px solid var(--border-strong);
@@ -121,7 +125,12 @@ input[type="file"] {
   background: var(--hover);
 }
 
-.theme-option[aria-checked="true"] {
+.theme-option:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.theme-option[data-selected="true"] {
   border-color: var(--buy);
   background: var(--buy-soft);
   color: var(--buy-dark);

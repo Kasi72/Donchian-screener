@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 
 import {
   getThemePreference,
@@ -10,6 +10,7 @@ import {
 } from "@/lib/theme/theme";
 
 const SYSTEM_THEME_QUERY = "(prefers-color-scheme: dark)";
+const THEME_OPTIONS = ["light", "dark", "system"] as const;
 
 function getStoredPreference(): ThemePreference {
   try {
@@ -28,6 +29,11 @@ function applyTheme(preference: ThemePreference, systemDark: boolean) {
 export function ThemeSelector() {
   const [preference, setPreference] = useState<ThemePreference>("system");
   const hasInitialized = useRef(false);
+  const radioRefs = useRef<Record<ThemePreference, HTMLInputElement | null>>({
+    light: null,
+    dark: null,
+    system: null,
+  });
 
   useEffect(() => {
     const activePreference = hasInitialized.current ? preference : getStoredPreference();
@@ -61,19 +67,53 @@ export function ThemeSelector() {
     }
   }
 
+  function handleRadioKeyDown(
+    event: KeyboardEvent<HTMLInputElement>,
+    currentPreference: ThemePreference,
+  ) {
+    const currentIndex = THEME_OPTIONS.indexOf(currentPreference);
+    let nextIndex: number | undefined;
+
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + THEME_OPTIONS.length) % THEME_OPTIONS.length;
+    } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % THEME_OPTIONS.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = THEME_OPTIONS.length - 1;
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+    const nextPreference = THEME_OPTIONS[nextIndex];
+    selectTheme(nextPreference);
+    radioRefs.current[nextPreference]?.focus();
+  }
+
   return (
     <div className="theme-selector" role="radiogroup" aria-label="Theme">
-      {(["light", "dark", "system"] as const).map((option) => (
-        <button
-          aria-checked={preference === option}
+      {THEME_OPTIONS.map((option) => (
+        <label
           className="theme-option"
+          data-selected={preference === option}
           key={option}
-          onClick={() => selectTheme(option)}
-          role="radio"
-          type="button"
         >
+          <input
+            checked={preference === option}
+            className="visually-hidden"
+            ref={(element) => {
+              radioRefs.current[option] = element;
+            }}
+            name="theme-preference"
+            onChange={() => selectTheme(option)}
+            onKeyDown={(event) => handleRadioKeyDown(event, option)}
+            type="radio"
+            value={option}
+          />
           {option.charAt(0).toUpperCase() + option.slice(1)}
-        </button>
+        </label>
       ))}
     </div>
   );
