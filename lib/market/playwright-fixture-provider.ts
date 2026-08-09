@@ -59,7 +59,10 @@ function buyQuotes(): YahooCandle[] {
   quotes[85] = quote(times[85], 90, 110, 100, 2_000);
   quotes[86] = quote(times[86], 108, 114, 112);
   quotes[87] = quote(times[87], 109, 116, 114);
-  quotes[91] = quote(times[91], 95.01, 108, 100, 900);
+  // Match the signal low exactly at the post-2025 ₹0.01 NSE tick. The prior
+  // fixture relied on legacy ₹0.05 rounding and ceased to be a valid BUY once
+  // instrument-specific tick policy was enforced.
+  quotes[91] = quote(times[91], 95.02, 108, 100, 900);
   quotes[92] = quote(times[92], 108, 111, 110);
   quotes[93] = quote(times[93], 109, 112, 111);
   quotes[99] = quote(times[99], 95.02, 108, 102);

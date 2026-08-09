@@ -59,9 +59,9 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
   const buyRow = table.getByRole("row").filter({ hasText: "RELIANCE" });
   await expect(buyRow).toContainText("BUY");
   await expect(buyRow).toContainText("₹102.00");
-  await expect(buyRow).toContainText("₹94.50");
-  await expect(buyRow).toContainText("₹109.50");
-  await expect(buyRow).toContainText("₹117.00");
+  await expect(buyRow).toContainText("₹94.52");
+  await expect(buyRow).toContainText("₹109.48");
+  await expect(buyRow).toContainText("₹116.96");
   await expect(buyRow).toContainText("14");
   await expect(buyRow.locator("time")).toHaveText("7 Aug 2026, 3:15 pm");
   await expect(buyRow.locator("time")).toHaveAttribute(
@@ -89,7 +89,7 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
   const details = page.getByRole("region", {
     name: "Calculation details for RELIANCE",
   });
-  await expect(details).toContainText("Current Donchian low₹95.01");
+  await expect(details).toContainText("Current Donchian low₹95.02");
   await expect(details).toContainText("Previous Donchian low₹90.00");
   await expect(details).toContainText("Strategy versionrules-v1");
 
@@ -102,10 +102,10 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
   const downloadedCsv = await readFile(downloadedPath!, "utf8");
   expect(downloadedCsv).toBe(
     [
-      "symbol,yahooSymbol,timeframe,status,recommendation,signalTime,autoPeriod,probability,entry,stop,target1,target2,currentLdc,previousLdc,anchorTime,strategyVersion,dataAsOf,message",
-      "RELIANCE,RELIANCE.NS,1h,BUY,BUY,1786095900000,14,,102,94.5,109.5,117,95.01,90,1785923100000,rules-v1,1786095900000,",
-      "TCS,,,NO_SIGNAL,,,,,,,,,,,,,,",
-      "BROKEN,,,PROVIDER_ERROR,,,,,,,,,,,,,,Market data provider failed for BROKEN.",
+      "symbol,yahooSymbol,timeframe,status,recommendation,signalTime,autoPeriod,probability,entry,stop,target1,target2,currentLdc,previousLdc,anchorTime,strategyVersion,dataAsOf,adjustmentMode,tickSize,tickPolicy,reactionHigh,rewardRisk,scoreVersion,score,higherTimeframeInput,anchorRationale,companyName,industry,message",
+      "RELIANCE,RELIANCE.NS,1h,BUY,BUY,1786095900000,14,,102,94.52,109.48,116.96,95.02,90,1785923100000,rules-v1,1786095900000,RAW,0.01,nse-cm-price-band-2025-v1,116,1.8716577540106951,structural-v1,0.7895,NEUTRAL_UNAVAILABLE,\"Selected confirmed pivot low 14 bars earlier: prominence 5.36 ATR, recovery 7.74 ATR, structural-v1 score 0.7895. Higher-timeframe input is unavailable and contributes a neutral zero.\",Reliance Industries Ltd,Energy,",
+      "TCS,,,NO_SIGNAL,,,,,,,,,,,,,,,,,,,,,,,,,",
+      "BROKEN,,,PROVIDER_ERROR,,,,,,,,,,,,,,,,,,,,,,,,,Market data provider failed for BROKEN.",
     ].join("\r\n"),
   );
 
