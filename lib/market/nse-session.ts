@@ -336,16 +336,25 @@ export function nseCandleEligibility(
   }
 
   if (timeframe === "1d") {
+    const isStandardStart = parts.hour === 9 && parts.minute === 15;
+    const isMuhuratStart = parts.hour === 18 && parts.minute === 15;
+    const isRecognizedAggregateStart = (isStandardStart || isMuhuratStart) &&
+      parts.second === 0 && parts.millisecond === 0;
+    const isSettledHistoricalAggregate = now.getTime() - candleStart >= 7 * DAY_MS;
     if (session.kind === "UNSUPPORTED") {
-      const weekday = new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
-      const isYahooDailyStart = parts.hour === 9 && parts.minute === 15 &&
-        parts.second === 0 && parts.millisecond === 0;
-      return weekday !== 0 && weekday !== 6 && isYahooDailyStart &&
-        now.getTime() - candleStart >= DAY_MS
+      return isRecognizedAggregateStart && isSettledHistoricalAggregate
         ? "COMPLETE"
         : "INVALID_SESSION";
     }
-    if (!isOpenSession(session)) return "INVALID_SESSION";
+    if (!isOpenSession(session)) {
+      // Yahoo's historical daily series can contain subsequently confirmed
+      // budget/Saturday or Muhurat sessions absent from a static calendar.
+      // Accept only settled aggregates at recognized provider start times;
+      // recent/current dates remain strictly calendar-bound.
+      return isRecognizedAggregateStart && isSettledHistoricalAggregate
+        ? "COMPLETE"
+        : "INVALID_SESSION";
+    }
     const localStart = kolkataLocalEpoch(candleStart);
     const close = lastSessionClose(dayStart(localStart), calendar);
     return close !== undefined && kolkataLocalEpoch(now.getTime()) >= close

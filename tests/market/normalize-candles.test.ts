@@ -160,6 +160,24 @@ describe("normalizeCandles", () => {
     expect(result).toMatchObject({ status: "INVALID_CANDLES", candles: [] });
   });
 
+  it("retains settled historical special-session daily aggregates at recognized Yahoo start times", () => {
+    const quotes = [
+      candle(`2022-10-24T18:15:00${IST}`, { adjclose: 103 }),
+      candle(`2025-02-01T09:15:00${IST}`, { adjclose: 103 }),
+      candle(`2026-08-07T09:15:00${IST}`, { adjclose: 103 }),
+    ];
+
+    const result = normalizeCandles(
+      quotes,
+      "1d",
+      new Date(`2026-08-09T16:00:00${IST}`),
+      { adjustmentMode: "BACK_ADJUSTED" },
+    );
+
+    expect(result.status).toBe("INSUFFICIENT_HISTORY");
+    expect(result.candles).toHaveLength(3);
+  });
+
   it("accepts the maintained 2025 Muhurat special session instead of treating it as a holiday", () => {
     const special = candle(`2025-10-21T13:45:00${IST}`);
     const result = normalizeCandles(
