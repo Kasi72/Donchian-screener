@@ -184,10 +184,7 @@ export function normalizeCandles(
   if (hasUnsupportedCalendar || latestExpectedNseCompletion(timeframe, now, calendar) === undefined) {
     return response("DATA_QUALITY_LIMITATION", candles, adjustmentMode);
   }
-  if (
-    candles.length === 0 &&
-    (candidates.length > 0 || hasUnparseableTimestamp || hasInvalidSession || hasInvalidPayload)
-  ) {
+  if (hasUnparseableTimestamp || hasInvalidSession || hasInvalidPayload) {
     return response("INVALID_CANDLES", candles, adjustmentMode);
   }
 

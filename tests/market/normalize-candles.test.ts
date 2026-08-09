@@ -42,7 +42,7 @@ describe("normalizeCandles", () => {
       expect.objectContaining({ time: older.date.getTime(), close: 103 }),
       expect.objectContaining({ time: duplicate.date.getTime(), close: 106 }),
     ]);
-    expect(result.status).toBe("INSUFFICIENT_HISTORY");
+    expect(result.status).toBe("INVALID_CANDLES");
     expect(result.asOf).toBe(duplicate.date.getTime());
   });
 
@@ -96,7 +96,7 @@ describe("normalizeCandles", () => {
     });
   });
 
-  it("keeps a valid duplicate when a later duplicate has invalid OHLC values", () => {
+  it("keeps a valid duplicate but rejects the partially malformed feed", () => {
     const now = new Date(`2026-08-10T10:07:00${IST}`);
     const valid = candle(`2026-08-10T10:00:00${IST}`);
     const invalidLaterDuplicate = candle(`2026-08-10T10:00:00${IST}`, { close: null });
@@ -104,7 +104,7 @@ describe("normalizeCandles", () => {
     const result = normalizeCandles([valid, invalidLaterDuplicate], "5m", now);
 
     expect(result).toMatchObject({
-      status: "INSUFFICIENT_HISTORY",
+      status: "INVALID_CANDLES",
       candles: [expect.objectContaining({ time: valid.date.getTime(), close: 103 })],
     });
   });
@@ -185,6 +185,31 @@ describe("normalizeCandles", () => {
       candles: [],
       adjustmentMode: "RAW",
     });
+  });
+
+  it.each([
+    ["1d", `2020-01-02T09:15:00${IST}`],
+    ["1wk", `2020-01-06T09:15:00${IST}`],
+    ["1mo", `2020-01-01T09:15:00${IST}`],
+  ] as const)("accepts completed historical %s aggregates outside holiday-calendar coverage", (timeframe, historicalTime) => {
+    const currentTime = timeframe === "1d"
+      ? `2026-08-07T09:15:00${IST}`
+      : timeframe === "1wk"
+        ? `2026-08-03T09:15:00${IST}`
+        : `2026-07-01T09:15:00${IST}`;
+    const quotes = [historicalTime, currentTime].map((time) =>
+      candle(time, { adjclose: 103 }),
+    );
+
+    const result = normalizeCandles(
+      quotes,
+      timeframe,
+      new Date(`2026-08-10T16:00:00${IST}`),
+      { adjustmentMode: "BACK_ADJUSTED" },
+    );
+
+    expect(result.status).not.toBe("DATA_QUALITY_LIMITATION");
+    expect(result.candles).toHaveLength(2);
   });
 
   it("back-adjusts every daily equity OHLC field from Yahoo adjclose provenance", () => {

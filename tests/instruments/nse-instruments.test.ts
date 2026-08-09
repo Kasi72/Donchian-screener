@@ -34,7 +34,7 @@ describe("canonical NSE instruments", () => {
     });
   });
 
-  it.each(["TCS.NS", "^UNKNOWN", "../RELIANCE", ""])(
+  it.each(["TCS.NS", "^UNKNOWN", "../RELIANCE", "NIFTY26AUGFUT", "BANKNIFTY26AUG54000CE", ""])(
     "rejects the non-canonical identity %j",
     (symbol) => {
       expect(resolveCanonicalNseInstrument({ symbol, yahooSymbol: "TCS.NS" })).toEqual({

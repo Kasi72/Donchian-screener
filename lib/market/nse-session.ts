@@ -307,10 +307,10 @@ export function nseCandleEligibility(
 ): NseCandleEligibility {
   const parts = kolkataParts(candleStart);
   const session = calendar.sessionFor(parts);
-  if (session.kind === "UNSUPPORTED") return "UNSUPPORTED_CALENDAR";
 
   const intervalMinutes = INTRADAY_INTERVAL_MINUTES[timeframe];
   if (intervalMinutes !== undefined) {
+    if (session.kind === "UNSUPPORTED") return "UNSUPPORTED_CALENDAR";
     if (!isOpenSession(session)) return "INVALID_SESSION";
     const minuteOfDay = parts.hour * 60 + parts.minute;
     const window = session.windows.find(
@@ -336,6 +336,15 @@ export function nseCandleEligibility(
   }
 
   if (timeframe === "1d") {
+    if (session.kind === "UNSUPPORTED") {
+      const weekday = new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
+      const isYahooDailyStart = parts.hour === 9 && parts.minute === 15 &&
+        parts.second === 0 && parts.millisecond === 0;
+      return weekday !== 0 && weekday !== 6 && isYahooDailyStart &&
+        now.getTime() - candleStart >= DAY_MS
+        ? "COMPLETE"
+        : "INVALID_SESSION";
+    }
     if (!isOpenSession(session)) return "INVALID_SESSION";
     const localStart = kolkataLocalEpoch(candleStart);
     const close = lastSessionClose(dayStart(localStart), calendar);
@@ -349,6 +358,10 @@ export function nseCandleEligibility(
   // calendar; only the current aggregate's expected close is calendar-bound.
   const startLocal = kolkataLocalEpoch(candleStart);
   const nowLocal = kolkataLocalEpoch(now.getTime());
+  if (session.kind === "UNSUPPORTED") {
+    const completedAge = timeframe === "1wk" ? 7 * DAY_MS : 32 * DAY_MS;
+    return nowLocal - startLocal >= completedAge ? "COMPLETE" : "UNSUPPORTED_CALENDAR";
+  }
   if (timeframe === "1wk") {
     const lastDay = lastTradingDayOfWeek(mondayOf(dayStart(startLocal)), calendar);
     if (lastDay === undefined) return nowLocal - startLocal >= 7 * DAY_MS ? "COMPLETE" : "UNSUPPORTED_CALENDAR";

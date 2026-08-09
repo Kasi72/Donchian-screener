@@ -14,6 +14,8 @@ type WorkPhase =
   | "scanning"
   | "complete"
   | "exporting";
+type ResultFilter = "ALL" | "BUY" | "NO_SIGNAL" | "DATA_ISSUE";
+type ResultSort = "INPUT" | "SYMBOL" | "STATUS";
 
 interface RequestError {
   title: string;
@@ -199,6 +201,8 @@ export function ScanForm() {
   const [parseResult, setParseResult] = useState<UniverseParseResult>();
   const [timeframe, setTimeframe] = useState<Timeframe>("1d");
   const [results, setResults] = useState<ScanItemResult[]>([]);
+  const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
+  const [resultSort, setResultSort] = useState<ResultSort>("INPUT");
   const [error, setError] = useState<RequestError>();
   const errorRef = useRef<HTMLDivElement>(null);
   const activeRequestRef = useRef<ActiveRequest | undefined>(undefined);
@@ -206,6 +210,18 @@ export function ScanForm() {
 
   const instruments = parseResult?.instruments ?? [];
   const isBusy = phase === "parsing" || phase === "scanning" || phase === "exporting";
+  const visibleResults = results
+    .filter((result) => {
+      if (resultFilter === "ALL") return true;
+      if (resultFilter === "BUY") return result.status === "BUY";
+      if (resultFilter === "NO_SIGNAL") return result.status === "NO_SIGNAL" || result.status === "OK";
+      return result.status !== "BUY" && result.status !== "NO_SIGNAL" && result.status !== "OK";
+    })
+    .sort((left, right) => {
+      if (resultSort === "SYMBOL") return left.symbol.localeCompare(right.symbol);
+      if (resultSort === "STATUS") return left.status.localeCompare(right.status) || left.symbol.localeCompare(right.symbol);
+      return 0;
+    });
 
   useEffect(() => {
     if (error) {
@@ -335,7 +351,7 @@ export function ScanForm() {
   }
 
   async function exportVisibleResults(): Promise<void> {
-    if (results.length === 0) {
+    if (visibleResults.length === 0) {
       return;
     }
 
@@ -347,7 +363,7 @@ export function ScanForm() {
       const response = await fetch("/api/scans/export", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ results }),
+        body: JSON.stringify({ results: visibleResults }),
         signal: request.controller.signal,
       });
       if (!ownsRequest(request)) {
@@ -500,10 +516,27 @@ export function ScanForm() {
       <section className="results-area" aria-labelledby="results-heading">
         <div className="results-heading-row">
           <h2 id="results-heading">Scan results</h2>
+          <label>
+            Show
+            <select value={resultFilter} onChange={(event) => setResultFilter(event.currentTarget.value as ResultFilter)}>
+              <option value="ALL">All results</option>
+              <option value="BUY">BUY only</option>
+              <option value="NO_SIGNAL">No signal</option>
+              <option value="DATA_ISSUE">Data issues</option>
+            </select>
+          </label>
+          <label>
+            Sort
+            <select value={resultSort} onChange={(event) => setResultSort(event.currentTarget.value as ResultSort)}>
+              <option value="INPUT">Upload order</option>
+              <option value="SYMBOL">Symbol</option>
+              <option value="STATUS">Status</option>
+            </select>
+          </label>
           <button
             className="secondary-action"
             type="button"
-            disabled={results.length === 0 || isBusy}
+            disabled={visibleResults.length === 0 || isBusy}
             onClick={() => void exportVisibleResults()}
           >
             {phase === "exporting" ? "Exporting…" : "Export results"}
@@ -515,7 +548,11 @@ export function ScanForm() {
               Entry reference is the completed signal candle close. Actual execution is the next
               obtainable price; skip a gap that reduces reward/risk below your minimum.
             </p>
-            <ScanResults results={results} />
+            {visibleResults.length > 0 ? (
+              <ScanResults results={visibleResults} />
+            ) : (
+              <p className="empty-state">No results match this filter.</p>
+            )}
           </>
         ) : phase === "parsing" || phase === "scanning" ? null : (
           <p className="empty-state">

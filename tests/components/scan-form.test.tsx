@@ -504,6 +504,8 @@ describe("ScanForm", () => {
     await screen.findByText("2 valid instruments");
     await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
     await screen.findByRole("table", { name: "Scan results" });
+    await user.selectOptions(screen.getByLabelText("Show"), "BUY");
+    expect(screen.queryByText("TCS")).not.toBeInTheDocument();
     vi.useFakeTimers();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Export results" }));
@@ -516,7 +518,6 @@ describe("ScanForm", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toEqual({
       results: [
         { symbol: "RELIANCE", status: "BUY", recommendation: BUY },
-        { symbol: "TCS", status: "NO_SIGNAL" },
       ],
     });
     expect(createObjectURL).toHaveBeenCalledOnce();

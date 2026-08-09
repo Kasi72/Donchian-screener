@@ -40,6 +40,7 @@ const INDEX_ALIASES: Readonly<Record<string, string>> = {
   INDIAVIX: "^INDIAVIX",
 };
 const EQUITY_SYMBOL = /^[A-Z0-9][A-Z0-9&-]{0,29}$/;
+const DERIVATIVE_CONTRACT = /\d{2}[A-Z]{3}(?:FUT|\d+(?:\.\d+)?(?:CE|PE))$/;
 const PRICE_BAND_POLICY_EFFECTIVE = new Date("2025-04-15T00:00:00+05:30").getTime();
 
 export function providerSymbolForCanonical(symbol: string): string | undefined {
@@ -51,7 +52,9 @@ export function providerSymbolForCanonical(symbol: string): string | undefined {
   if (BUILT_IN_INDEX_SYMBOLS.has(canonical)) {
     return canonical;
   }
-  return EQUITY_SYMBOL.test(canonical) ? `${canonical}.NS` : undefined;
+  return EQUITY_SYMBOL.test(canonical) && !DERIVATIVE_CONTRACT.test(canonical)
+    ? `${canonical}.NS`
+    : undefined;
 }
 
 export function resolveCanonicalNseInstrument(
