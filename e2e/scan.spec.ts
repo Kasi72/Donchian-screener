@@ -48,6 +48,50 @@ async function readDownloadedCsv(page: Page, buttonName: string, filename: strin
   return readFile(downloadedPath!, "utf8");
 }
 
+async function borderContrastRatios(page: Page, selector: string): Promise<{ inside: number; outside: number }> {
+  return page.locator(selector).first().evaluate((element) => {
+    const styles = getComputedStyle(element);
+    const rgb = (value: string): [number, number, number] => {
+      const channels = value.match(/[\d.]+/g)?.slice(0, 3).map(Number);
+      if (!channels || channels.length !== 3) {
+        throw new Error(`Could not parse computed color: ${value}`);
+      }
+      return channels as [number, number, number];
+    };
+    const luminance = (value: string): number => {
+      const channels = rgb(value).map((channel) => {
+        const normalized = channel / 255;
+        return normalized <= 0.04045
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    };
+    const contrast = (first: string, second: string): number => {
+      const firstLuminance = luminance(first);
+      const secondLuminance = luminance(second);
+      return (Math.max(firstLuminance, secondLuminance) + 0.05)
+        / (Math.min(firstLuminance, secondLuminance) + 0.05);
+    };
+    const nearestOpaqueBackground = (): string => {
+      let ancestor = element.parentElement;
+      while (ancestor) {
+        const background = getComputedStyle(ancestor).backgroundColor;
+        const channels = background.match(/[\d.]+/g)?.map(Number) ?? [];
+        if ((channels[3] ?? 1) > 0) {
+          return background;
+        }
+        ancestor = ancestor.parentElement;
+      }
+      return getComputedStyle(document.documentElement).backgroundColor;
+    };
+    return {
+      inside: contrast(styles.borderTopColor, styles.backgroundColor),
+      outside: contrast(styles.borderTopColor, nearestOpaqueBackground()),
+    };
+  });
+}
+
 test("persists an explicit dark theme and follows the system color scheme", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
@@ -66,6 +110,30 @@ test("persists an explicit dark theme and follows the system color scheme", asyn
   await expect(root).toHaveAttribute("data-theme", "light");
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(root).toHaveAttribute("data-theme", "dark");
+});
+
+test("keeps control borders at 3:1 contrast in light and dark themes", async ({ page }) => {
+  await page.goto("/");
+  await uploadPrimaryUniverse(page);
+  await scanAtOneHour(page);
+
+  const selectors = [
+    ".theme-option[data-selected=\"true\"]",
+    ".theme-option[data-selected=\"false\"]",
+    ".field select",
+    ".results-toolbar input",
+    ".table-action",
+  ];
+
+  for (const theme of ["Light", "Dark"] as const) {
+    await page.getByText(theme, { exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme.toLowerCase());
+    for (const selector of selectors) {
+      const ratios = await borderContrastRatios(page, selector);
+      expect(ratios.inside, `${theme} ${selector} inside`).toBeGreaterThanOrEqual(3);
+      expect(ratios.outside, `${theme} ${selector} outside`).toBeGreaterThanOrEqual(3);
+    }
+  }
 });
 
 test("completes the deterministic mixed-result flow and exports its exact CSV", async ({
@@ -168,6 +236,21 @@ test("sorts, combines filters, preserves details, and exports the intended rows"
   const instrumentSort = page.getByRole("button", { name: "Sort by Instrument" });
   const instrumentHeader = instrumentSort.locator("xpath=..");
   const instruments = table.locator("tbody > tr:not(.details-row) > .instrument-column");
+
+  const category = page.getByRole("combobox", { name: "Show", exact: true });
+  await category.selectOption("BUY");
+  await expect(instruments).toHaveText(["RELIANCE"]);
+  await expect(page.getByRole("button", { name: "Export filtered (1)" })).toBeEnabled();
+  await category.selectOption("NO_SIGNAL");
+  await expect(instruments).toHaveText(["TCS"]);
+  await category.selectOption("DATA_ISSUE");
+  await expect(instruments).toHaveText(["BROKEN"]);
+  await category.selectOption("ALL");
+  await expect(instruments).toHaveText(["RELIANCE", "TCS", "BROKEN"]);
+
+  await page.getByLabel("Status filter").fill("BUY");
+  await expect(instruments).toHaveText(["RELIANCE"]);
+  await page.getByRole("button", { name: "Clear table filters" }).click();
 
   await instrumentSort.click();
   await expect(instrumentHeader).toHaveAttribute("aria-sort", "ascending");

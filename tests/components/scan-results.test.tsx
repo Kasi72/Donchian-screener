@@ -149,7 +149,8 @@ describe("ScanResults", () => {
 
     await user.clear(screen.getByLabelText("Minimum Entry"));
     await user.type(screen.getByLabelText("Data as of from"), "2026-08-08");
-    expect(screen.getByText("No results visible")).toBeInTheDocument();
+    expect(screen.getByText("No results match these table filters", { exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear table filters" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "Clear table filters" }));
     expect(screen.getByText("5 results visible")).toBeInTheDocument();

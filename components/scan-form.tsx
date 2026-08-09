@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ScanResults, type ScanResultsProjection } from "@/components/scan-results";
 import type { UniverseInstrument, UniverseParseResult } from "@/lib/domain/types";
@@ -14,6 +14,7 @@ type WorkPhase =
   | "scanning"
   | "complete"
   | "exporting";
+type ResultFilter = "ALL" | "BUY" | "NO_SIGNAL" | "DATA_ISSUE";
 
 interface RequestError {
   title: string;
@@ -199,6 +200,7 @@ export function ScanForm() {
   const [parseResult, setParseResult] = useState<UniverseParseResult>();
   const [timeframe, setTimeframe] = useState<Timeframe>("1d");
   const [results, setResults] = useState<ScanItemResult[]>([]);
+  const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
   const [projection, setProjection] = useState<ScanResultsProjection>({ filtered: [], selected: [] });
   const [error, setError] = useState<RequestError>();
   const errorRef = useRef<HTMLDivElement>(null);
@@ -207,6 +209,15 @@ export function ScanForm() {
 
   const instruments = parseResult?.instruments ?? [];
   const isBusy = phase === "parsing" || phase === "scanning" || phase === "exporting";
+  const categoryResults = useMemo(
+    () => results.filter((result) => {
+      if (resultFilter === "ALL") return true;
+      if (resultFilter === "BUY") return result.status === "BUY";
+      if (resultFilter === "NO_SIGNAL") return result.status === "NO_SIGNAL" || result.status === "OK";
+      return result.status !== "BUY" && result.status !== "NO_SIGNAL" && result.status !== "OK";
+    }),
+    [resultFilter, results],
+  );
   const resetProjection = useCallback(() => setProjection({ filtered: [], selected: [] }), []);
 
   useEffect(() => {
@@ -505,6 +516,21 @@ export function ScanForm() {
       <section className="results-area" aria-labelledby="results-heading">
         <div className="results-heading-row">
           <h2 id="results-heading">Scan results</h2>
+          <label>
+            Show
+            <select
+              value={resultFilter}
+              onChange={(event) => {
+                setResultFilter(event.currentTarget.value as ResultFilter);
+                resetProjection();
+              }}
+            >
+              <option value="ALL">All results</option>
+              <option value="BUY">BUY only</option>
+              <option value="NO_SIGNAL">No signal</option>
+              <option value="DATA_ISSUE">Data issues</option>
+            </select>
+          </label>
           <button
             className="secondary-action"
             type="button"
@@ -528,7 +554,11 @@ export function ScanForm() {
               Entry reference is the completed signal candle close. Actual execution is the next
               obtainable price; skip a gap that reduces reward/risk below your minimum.
             </p>
-            <ScanResults results={results} onProjectionChange={setProjection} />
+            {categoryResults.length > 0 ? (
+              <ScanResults results={categoryResults} onProjectionChange={setProjection} />
+            ) : (
+              <p className="empty-state">No results match this filter.</p>
+            )}
           </>
         ) : phase === "parsing" || phase === "scanning" ? null : (
           <p className="empty-state">

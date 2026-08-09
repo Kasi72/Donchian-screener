@@ -507,7 +507,61 @@ describe("ScanForm", () => {
     expect(screen.getByRole("button", { name: "Scan for BUY signals" })).toBeDisabled();
   });
 
-  it("exports only the table's filtered projection and downloads the returned CSV", async () => {
+  it("applies the exact ALL, BUY, NO_SIGNAL, and DATA_ISSUE scan categories before the table", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(FIRST_PARSE))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          results: [
+            { symbol: "RELIANCE", status: "BUY", recommendation: BUY },
+            { symbol: "TCS", status: "NO_SIGNAL" },
+            { symbol: "INFY", status: "OK" },
+            { symbol: "BROKEN", status: "PROVIDER_ERROR", message: "Provider failed" },
+          ],
+        }),
+      );
+    render(<ScanForm />);
+
+    await user.upload(
+      screen.getByLabelText("Upload stock list"),
+      new File(["Symbol\nRELIANCE\nTCS"], "stocks.csv", { type: "text/csv" }),
+    );
+    await screen.findByText("2 valid instruments");
+    await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
+    const table = await screen.findByRole("table", { name: "Scan results" });
+    const show = screen.getByLabelText("Show");
+
+    await user.selectOptions(show, "BUY");
+    expect(within(table).getByText("RELIANCE")).toBeInTheDocument();
+    expect(within(table).queryByText("TCS")).not.toBeInTheDocument();
+    expect(within(table).queryByText("INFY")).not.toBeInTheDocument();
+    expect(within(table).queryByText("BROKEN")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Export filtered (1)" })).toBeEnabled();
+
+    await user.selectOptions(show, "NO_SIGNAL");
+    expect(within(table).queryByText("RELIANCE")).not.toBeInTheDocument();
+    expect(within(table).getByText("TCS")).toBeInTheDocument();
+    expect(within(table).getByText("INFY")).toBeInTheDocument();
+    expect(within(table).queryByText("BROKEN")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Export filtered (2)" })).toBeEnabled();
+
+    await user.selectOptions(show, "DATA_ISSUE");
+    expect(within(table).queryByText("RELIANCE")).not.toBeInTheDocument();
+    expect(within(table).queryByText("TCS")).not.toBeInTheDocument();
+    expect(within(table).queryByText("INFY")).not.toBeInTheDocument();
+    expect(within(table).getByText("BROKEN")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Export filtered (1)" })).toBeEnabled();
+
+    await user.selectOptions(show, "ALL");
+    expect(within(table).getByText("RELIANCE")).toBeInTheDocument();
+    expect(within(table).getByText("TCS")).toBeInTheDocument();
+    expect(within(table).getByText("INFY")).toBeInTheDocument();
+    expect(within(table).getByText("BROKEN")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Export filtered (4)" })).toBeEnabled();
+  });
+
+  it("exports rows remaining after both the exact scan category and table filters", async () => {
     const user = userEvent.setup();
     const csv = "symbol,status\r\nRELIANCE,BUY\r\nTCS,NO_SIGNAL";
     const fetchMock = vi
@@ -518,6 +572,11 @@ describe("ScanForm", () => {
           results: [
             { symbol: "RELIANCE", status: "BUY", recommendation: BUY },
             { symbol: "TCS", status: "NO_SIGNAL" },
+            {
+              symbol: "SBIN",
+              status: "BUY",
+              recommendation: { ...BUY, symbol: "SBIN", yahooSymbol: "SBIN.NS" },
+            },
           ],
         }),
       )
@@ -547,8 +606,10 @@ describe("ScanForm", () => {
     await screen.findByText("2 valid instruments");
     await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
     await screen.findByRole("table", { name: "Scan results" });
+    await user.selectOptions(screen.getByLabelText("Show"), "BUY");
     await user.type(screen.getByLabelText("Instrument filter"), "RELIANCE");
     expect(screen.queryByText("TCS")).not.toBeInTheDocument();
+    expect(screen.queryByText("SBIN")).not.toBeInTheDocument();
     vi.useFakeTimers();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Export filtered (1)" }));

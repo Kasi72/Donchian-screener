@@ -235,7 +235,7 @@ export function ScanResults({
         </div>
         <button className="table-action" type="button" onClick={() => setFilters({})}>Clear table filters</button>
         <p className="table-count" aria-live="polite">
-          {projectedResults.length === 0 ? "No results visible" : `${projectedResults.length} result${projectedResults.length === 1 ? "" : "s"} visible`}
+          {projectedResults.length === 0 ? "No results match these table filters" : `${projectedResults.length} result${projectedResults.length === 1 ? "" : "s"} visible`}
         </p>
         <p className="table-count" aria-live="polite">{selectedResults.length} selected</p>
         <button className="table-action" type="button" onClick={() => setSelectedIds(new Set())}>Clear selection</button>

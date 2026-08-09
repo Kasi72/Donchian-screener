@@ -56,11 +56,11 @@ const STATUS_TEXT: Record<ScanItemResult["status"], string> = {
   TICK_SIZE_UNRESOLVED: "Instrument tick size could not be resolved",
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 function normalizeText(value: string): string {
   return value.toLocaleLowerCase().replaceAll(/[_-]+/g, " ").replaceAll(/\s+/g, " ").trim();
 }
+
+const EXACT_STATUS_FILTERS = new Set(Object.keys(STATUS_TEXT).map(normalizeText));
 
 function statusText(result: ScanItemResult): string {
   return result.message ?? STATUS_TEXT[result.status];
@@ -111,11 +111,13 @@ function dateInput(value: RangeInput, isEnd: boolean): number | undefined {
     return undefined;
   }
   const text = value.trim();
-  const timestamp = Date.parse(text);
+  const timestamp = /^\d{4}-\d{2}-\d{2}$/.test(text)
+    ? Date.parse(`${text}T${isEnd ? "23:59:59.999" : "00:00:00.000"}+05:30`)
+    : Date.parse(text);
   if (!Number.isFinite(timestamp)) {
     return undefined;
   }
-  return /^\d{4}-\d{2}-\d{2}$/.test(text) && isEnd ? timestamp + DAY_MS - 1 : timestamp;
+  return timestamp;
 }
 
 function isWithinRange(value: number | undefined, minimum: number | undefined, maximum: number | undefined): boolean {
@@ -145,8 +147,13 @@ export function filterResults(indexedResults: IndexedResult[], filters: TableFil
     if (symbol && !normalizeText(result.symbol).includes(symbol)) {
       return false;
     }
-    if (status && !normalizeText(`${result.status} ${statusText(result)}`).includes(status)) {
-      return false;
+    if (status) {
+      const statusKey = normalizeText(result.status);
+      if (EXACT_STATUS_FILTERS.has(status)
+        ? statusKey !== status
+        : !normalizeText(`${result.status} ${statusText(result)}`).includes(status)) {
+        return false;
+      }
     }
     return (
       isWithinRange(columnValue(result, "entry") as number | undefined, ...ranges.entry) &&
