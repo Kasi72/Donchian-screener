@@ -149,12 +149,15 @@ describe("ScanForm", () => {
     await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
     await screen.findByRole("table", { name: "Scan results" });
     expect(screen.getByText("Scan complete: 0 BUY signals across 1 result.")).toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: "Select TCS" }));
+    expect(screen.getByRole("button", { name: "Export selected (1)" })).toBeEnabled();
 
     await user.selectOptions(screen.getByLabelText("Candle timeframe"), "1h");
 
     expect(screen.queryByRole("table", { name: "Scan results" })).not.toBeInTheDocument();
     expect(screen.queryByText(/Scan complete:/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Export results" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Export filtered (0)" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Export selected (0)" })).toBeDisabled();
     expect(screen.getByText("Ready to scan 2 instruments.")).toBeInTheDocument();
   });
 
@@ -257,7 +260,7 @@ describe("ScanForm", () => {
     await screen.findByText("2 valid instruments");
     await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
     await screen.findByRole("table", { name: "Scan results" });
-    await user.click(screen.getByRole("button", { name: "Export results" }));
+    await user.click(screen.getByRole("button", { name: "Export filtered (1)" }));
     expect(input).toBeEnabled();
 
     await user.upload(input, new File(["Symbol\nINFY"], "newer.csv", { type: "text/csv" }));
@@ -314,7 +317,8 @@ describe("ScanForm", () => {
     expect(error).toHaveTextContent("The server returned invalid scan results.");
     expect(error).toHaveFocus();
     expect(screen.queryByRole("table", { name: "Scan results" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Export results" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Export filtered (0)" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Export selected (0)" })).toBeDisabled();
   });
 
   it("rejects scan timestamps that cannot be rendered", async () => {
@@ -362,7 +366,8 @@ describe("ScanForm", () => {
     expect(screen.getByText("Uploading another file replaces this list.")).toBeInTheDocument();
     expect(screen.getByLabelText("Candle timeframe")).toHaveValue("1d");
     expect(screen.getByRole("button", { name: "Scan for BUY signals" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Export results" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Export filtered (0)" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Export selected (0)" })).toBeDisabled();
     expect(screen.getByRole("radio", { name: "Validated Model BUY" })).toBeDisabled();
     expect(
       screen.getByText(
@@ -438,11 +443,49 @@ describe("ScanForm", () => {
       instruments: FIRST_PARSE.instruments,
       timeframe: "1h",
     });
+    await user.click(screen.getByRole("checkbox", { name: "Select RELIANCE" }));
+    expect(screen.getByRole("button", { name: "Export selected (1)" })).toBeEnabled();
 
     await user.upload(input, new File(["Symbol\nINFY"], "replacement.csv", { type: "text/csv" }));
     await screen.findByText("1 valid instrument");
     expect(screen.queryByRole("table", { name: "Scan results" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export filtered (0)" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Export selected (0)" })).toBeDisabled();
     expect(screen.getByText("Ready to scan 1 instrument.")).toBeInTheDocument();
+  });
+
+  it("clears selected and filtered export projections when a new scan replaces results", async () => {
+    const user = userEvent.setup();
+    const replacementScan = deferred<Response>();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(FIRST_PARSE))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          results: [
+            { symbol: "RELIANCE", status: "BUY", recommendation: BUY },
+            { symbol: "TCS", status: "NO_SIGNAL" },
+          ],
+        }),
+      )
+      .mockReturnValueOnce(replacementScan.promise);
+    render(<ScanForm />);
+
+    await user.upload(
+      screen.getByLabelText("Upload stock list"),
+      new File(["Symbol\nRELIANCE\nTCS"], "stocks.csv", { type: "text/csv" }),
+    );
+    await screen.findByText("2 valid instruments");
+    await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
+    await screen.findByRole("table", { name: "Scan results" });
+    await user.click(screen.getByRole("checkbox", { name: "Select RELIANCE" }));
+    await user.type(screen.getByLabelText("Instrument filter"), "RELIANCE");
+    expect(screen.getByRole("button", { name: "Export filtered (1)" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Export selected (1)" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
+
+    expect(screen.getByRole("button", { name: "Export filtered (0)" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Export selected (0)" })).toBeDisabled();
   });
 
   it("focuses a plain-language error summary when parsing fails", async () => {
@@ -464,7 +507,7 @@ describe("ScanForm", () => {
     expect(screen.getByRole("button", { name: "Scan for BUY signals" })).toBeDisabled();
   });
 
-  it("posts all visible rows to the export API and downloads the returned CSV", async () => {
+  it("exports only the table's filtered projection and downloads the returned CSV", async () => {
     const user = userEvent.setup();
     const csv = "symbol,status\r\nRELIANCE,BUY\r\nTCS,NO_SIGNAL";
     const fetchMock = vi
@@ -504,11 +547,11 @@ describe("ScanForm", () => {
     await screen.findByText("2 valid instruments");
     await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
     await screen.findByRole("table", { name: "Scan results" });
-    await user.selectOptions(screen.getByLabelText("Show"), "BUY");
+    await user.type(screen.getByLabelText("Instrument filter"), "RELIANCE");
     expect(screen.queryByText("TCS")).not.toBeInTheDocument();
     vi.useFakeTimers();
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Export results" }));
+      fireEvent.click(screen.getByRole("button", { name: "Export filtered (1)" }));
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -523,9 +566,51 @@ describe("ScanForm", () => {
     expect(createObjectURL).toHaveBeenCalledOnce();
     expect(click).toHaveBeenCalledOnce();
     expect(connectedDuringClick).toBe(true);
-    expect(document.querySelector('a[download="scan-results.csv"]')).not.toBeInTheDocument();
+    expect(document.querySelector('a[download="scan-results-filtered.csv"]')).not.toBeInTheDocument();
     expect(revokeObjectURL).not.toHaveBeenCalled();
     vi.runAllTimers();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:scan-results");
+  });
+
+  it("exports hidden selected rows and disables selected export while another export is busy", async () => {
+    const user = userEvent.setup();
+    const pendingExport = deferred<Response>();
+    const fetchMock = vi
+      .mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(FIRST_PARSE))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          results: [
+            { symbol: "RELIANCE", status: "BUY", recommendation: BUY },
+            { symbol: "TCS", status: "NO_SIGNAL" },
+          ],
+        }),
+      )
+      .mockReturnValueOnce(pendingExport.promise)
+      .mockResolvedValueOnce(new Response("symbol,status"));
+    vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:scan-results"), revokeObjectURL: vi.fn() });
+    render(<ScanForm />);
+
+    await user.upload(
+      screen.getByLabelText("Upload stock list"),
+      new File(["Symbol\nRELIANCE\nTCS"], "stocks.csv", { type: "text/csv" }),
+    );
+    await screen.findByText("2 valid instruments");
+    await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
+    await screen.findByRole("table", { name: "Scan results" });
+
+    await user.click(screen.getByRole("checkbox", { name: "Select TCS" }));
+    await user.type(screen.getByLabelText("Instrument filter"), "RELIANCE");
+    expect(screen.queryByText("TCS")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export selected (1)" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Export filtered (1)" }));
+    expect(screen.getByRole("button", { name: "Export selected (1)" })).toBeDisabled();
+    await act(async () => pendingExport.resolve(new Response("symbol,status")));
+
+    await user.click(screen.getByRole("button", { name: "Export selected (1)" }));
+    expect(JSON.parse(String(fetchMock.mock.calls[3][1]?.body))).toEqual({
+      results: [{ symbol: "TCS", status: "NO_SIGNAL" }],
+    });
   });
 });

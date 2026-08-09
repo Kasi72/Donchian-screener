@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ScanResults } from "@/components/scan-results";
+import { ScanResults, type ScanResultsProjection } from "@/components/scan-results";
 import type { UniverseInstrument, UniverseParseResult } from "@/lib/domain/types";
 import type { Timeframe } from "@/lib/market/provider";
 import type { ScanItemResult } from "@/lib/signals/scan-symbol";
@@ -14,8 +14,6 @@ type WorkPhase =
   | "scanning"
   | "complete"
   | "exporting";
-type ResultFilter = "ALL" | "BUY" | "NO_SIGNAL" | "DATA_ISSUE";
-type ResultSort = "INPUT" | "SYMBOL" | "STATUS";
 
 interface RequestError {
   title: string;
@@ -201,8 +199,7 @@ export function ScanForm() {
   const [parseResult, setParseResult] = useState<UniverseParseResult>();
   const [timeframe, setTimeframe] = useState<Timeframe>("1d");
   const [results, setResults] = useState<ScanItemResult[]>([]);
-  const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
-  const [resultSort, setResultSort] = useState<ResultSort>("INPUT");
+  const [projection, setProjection] = useState<ScanResultsProjection>({ filtered: [], selected: [] });
   const [error, setError] = useState<RequestError>();
   const errorRef = useRef<HTMLDivElement>(null);
   const activeRequestRef = useRef<ActiveRequest | undefined>(undefined);
@@ -210,18 +207,7 @@ export function ScanForm() {
 
   const instruments = parseResult?.instruments ?? [];
   const isBusy = phase === "parsing" || phase === "scanning" || phase === "exporting";
-  const visibleResults = results
-    .filter((result) => {
-      if (resultFilter === "ALL") return true;
-      if (resultFilter === "BUY") return result.status === "BUY";
-      if (resultFilter === "NO_SIGNAL") return result.status === "NO_SIGNAL" || result.status === "OK";
-      return result.status !== "BUY" && result.status !== "NO_SIGNAL" && result.status !== "OK";
-    })
-    .sort((left, right) => {
-      if (resultSort === "SYMBOL") return left.symbol.localeCompare(right.symbol);
-      if (resultSort === "STATUS") return left.status.localeCompare(right.status) || left.symbol.localeCompare(right.symbol);
-      return 0;
-    });
+  const resetProjection = useCallback(() => setProjection({ filtered: [], selected: [] }), []);
 
   useEffect(() => {
     if (error) {
@@ -263,6 +249,7 @@ export function ScanForm() {
     setFileName(file.name);
     setParseResult(undefined);
     setResults([]);
+    resetProjection();
     setError(undefined);
     setPhase("parsing");
 
@@ -312,6 +299,7 @@ export function ScanForm() {
     const request = beginRequest();
     setError(undefined);
     setResults([]);
+    resetProjection();
     setPhase("scanning");
 
     try {
@@ -350,8 +338,8 @@ export function ScanForm() {
     }
   }
 
-  async function exportVisibleResults(): Promise<void> {
-    if (visibleResults.length === 0) {
+  async function exportRows(rows: ScanItemResult[], filename: string): Promise<void> {
+    if (rows.length === 0) {
       return;
     }
 
@@ -363,7 +351,7 @@ export function ScanForm() {
       const response = await fetch("/api/scans/export", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ results: visibleResults }),
+        body: JSON.stringify({ results: rows }),
         signal: request.controller.signal,
       });
       if (!ownsRequest(request)) {
@@ -380,7 +368,7 @@ export function ScanForm() {
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
-      link.download = "scan-results.csv";
+      link.download = filename;
       document.body.append(link);
       try {
         link.click();
@@ -441,6 +429,7 @@ export function ScanForm() {
                 cancelActiveRequest();
                 setTimeframe(event.currentTarget.value as Timeframe);
                 setResults([]);
+                resetProjection();
                 setError(undefined);
                 setPhase(instruments.length > 0 ? "ready" : "empty");
               }}
@@ -516,30 +505,21 @@ export function ScanForm() {
       <section className="results-area" aria-labelledby="results-heading">
         <div className="results-heading-row">
           <h2 id="results-heading">Scan results</h2>
-          <label>
-            Show
-            <select value={resultFilter} onChange={(event) => setResultFilter(event.currentTarget.value as ResultFilter)}>
-              <option value="ALL">All results</option>
-              <option value="BUY">BUY only</option>
-              <option value="NO_SIGNAL">No signal</option>
-              <option value="DATA_ISSUE">Data issues</option>
-            </select>
-          </label>
-          <label>
-            Sort
-            <select value={resultSort} onChange={(event) => setResultSort(event.currentTarget.value as ResultSort)}>
-              <option value="INPUT">Upload order</option>
-              <option value="SYMBOL">Symbol</option>
-              <option value="STATUS">Status</option>
-            </select>
-          </label>
           <button
             className="secondary-action"
             type="button"
-            disabled={visibleResults.length === 0 || isBusy}
-            onClick={() => void exportVisibleResults()}
+            disabled={projection.filtered.length === 0 || isBusy}
+            onClick={() => void exportRows(projection.filtered, "scan-results-filtered.csv")}
           >
-            {phase === "exporting" ? "Exporting…" : "Export results"}
+            Export filtered ({projection.filtered.length})
+          </button>
+          <button
+            className="secondary-action"
+            type="button"
+            disabled={projection.selected.length === 0 || isBusy}
+            onClick={() => void exportRows(projection.selected, "scan-results-selected.csv")}
+          >
+            Export selected ({projection.selected.length})
           </button>
         </div>
         {results.length > 0 ? (
@@ -548,11 +528,7 @@ export function ScanForm() {
               Entry reference is the completed signal candle close. Actual execution is the next
               obtainable price; skip a gap that reduces reward/risk below your minimum.
             </p>
-            {visibleResults.length > 0 ? (
-              <ScanResults results={visibleResults} />
-            ) : (
-              <p className="empty-state">No results match this filter.</p>
-            )}
+            <ScanResults results={results} onProjectionChange={setProjection} />
           </>
         ) : phase === "parsing" || phase === "scanning" ? null : (
           <p className="empty-state">
