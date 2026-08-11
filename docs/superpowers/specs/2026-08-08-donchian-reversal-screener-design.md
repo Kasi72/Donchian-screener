@@ -130,6 +130,7 @@ Recommended persistence is PostgreSQL/Supabase for scan records, accumulated can
 - Store raw and adjusted status explicitly.
 - Use raw OHLC on every timeframe to preserve exact parity with the unadjusted TradingView Donchian chart used for strategy verification.
 - Remove zero-volume flat Yahoo placeholders before session validation; they are provider snapshots, not chart candles, and must not affect period distance.
+- Remove wholly empty Yahoo OHLCV placeholders while continuing to reject partially malformed rows; accept regular-grid intraday bars only when their interval overlaps an explicitly modeled special session.
 - Never convert a provider failure into `NO SIGNAL`.
 
 Required data statuses:
