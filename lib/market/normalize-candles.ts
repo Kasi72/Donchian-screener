@@ -89,6 +89,16 @@ function isZeroVolumeFlatPlaceholder(quote: YahooCandle): boolean {
   );
 }
 
+function isWhollyEmptyPlaceholder(quote: YahooCandle): boolean {
+  return (
+    quote.open == null &&
+    quote.high == null &&
+    quote.low == null &&
+    quote.close == null &&
+    quote.volume == null
+  );
+}
+
 function adjustedCandle(
   quote: ValidYahooCandle,
   adjustmentMode: AdjustmentMode,
@@ -142,14 +152,16 @@ export function normalizeCandles(
 ): CandleResponse {
   const adjustmentMode = options.adjustmentMode ?? "RAW";
   const calendar = options.calendar ?? NSE_TRADING_CALENDAR;
-  const parsedQuotes = quotes
-    .filter((quote) => !isZeroVolumeFlatPlaceholder(quote))
-    .map((quote, index) => ({
-      quote,
-      index,
-      time: quoteTime(quote),
-    }));
-  const hasUnparseableTimestamp = parsedQuotes.some((candidate) => candidate.time === null);
+  const parsedInput = quotes.map((quote, index) => ({
+    quote,
+    index,
+    time: quoteTime(quote),
+  }));
+  const hasUnparseableTimestamp = parsedInput.some((candidate) => candidate.time === null);
+  const parsedQuotes = parsedInput.filter(
+    ({ quote }) =>
+      !isZeroVolumeFlatPlaceholder(quote) && !isWhollyEmptyPlaceholder(quote),
+  );
   let hasInvalidSession = false;
   let hasUnsupportedCalendar = false;
   const candidates = parsedQuotes

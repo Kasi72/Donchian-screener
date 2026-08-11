@@ -288,9 +288,10 @@ function completionForIntradayStart(
   const session = calendar.sessionFor(dateAt(startDay));
   if (!isOpenSession(session)) return undefined;
   const startMinutes = (localStart - startDay) / 60_000;
+  const endMinutes = startMinutes + intervalMinutes;
   const window = session.windows.find(
     (candidate) =>
-      startMinutes >= candidate.openMinutes && startMinutes < candidate.closeMinutes,
+      startMinutes < candidate.closeMinutes && endMinutes > candidate.openMinutes,
   );
   if (window === undefined) return undefined;
   return Math.min(
@@ -313,15 +314,22 @@ export function nseCandleEligibility(
     if (session.kind === "UNSUPPORTED") return "UNSUPPORTED_CALENDAR";
     if (!isOpenSession(session)) return "INVALID_SESSION";
     const minuteOfDay = parts.hour * 60 + parts.minute;
+    const endMinute = minuteOfDay + intervalMinutes;
     const window = session.windows.find(
       (candidate) =>
-        minuteOfDay >= candidate.openMinutes && minuteOfDay < candidate.closeMinutes,
+        minuteOfDay < candidate.closeMinutes && endMinute > candidate.openMinutes,
     );
+    const alignedToWindow =
+      window !== undefined &&
+      (minuteOfDay - window.openMinutes) % intervalMinutes === 0;
+    const alignedToRegularGrid =
+      session.kind === "SPECIAL" &&
+      (minuteOfDay - REGULAR_SESSION[0].openMinutes) % intervalMinutes === 0;
     if (
       window === undefined ||
       parts.second !== 0 ||
       parts.millisecond !== 0 ||
-      (minuteOfDay - window.openMinutes) % intervalMinutes !== 0
+      (!alignedToWindow && !alignedToRegularGrid)
     ) {
       return "INVALID_SESSION";
     }

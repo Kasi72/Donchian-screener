@@ -224,6 +224,45 @@ describe("normalizeCandles", () => {
     ]);
   });
 
+  it("drops Yahoo wholly empty hourly placeholders without hiding partial corruption", () => {
+    const emptyPlaceholder = candle(`2026-05-01T09:15:00${IST}`, {
+      open: null,
+      high: null,
+      low: null,
+      close: null,
+      volume: null,
+    });
+    const finalHour = candle(`2026-08-07T15:15:00${IST}`);
+
+    const result = normalizeCandles(
+      [emptyPlaceholder, finalHour],
+      "1h",
+      new Date(`2026-08-07T16:00:00${IST}`),
+    );
+
+    expect(result.status).toBe("INSUFFICIENT_HISTORY");
+    expect(result.candles).toEqual([
+      expect.objectContaining({ time: finalHour.date.getTime() }),
+    ]);
+  });
+
+  it("accepts Yahoo hourly bars on the regular grid that overlap a modeled special session", () => {
+    const first = candle(`2025-10-21T13:15:00${IST}`);
+    const second = candle(`2025-10-21T14:15:00${IST}`);
+
+    const result = normalizeCandles(
+      [first, second],
+      "1h",
+      new Date(`2025-10-21T15:00:00${IST}`),
+    );
+
+    expect(result.status).toBe("INSUFFICIENT_HISTORY");
+    expect(result.candles.map((item) => item.time)).toEqual([
+      first.date.getTime(),
+      second.date.getTime(),
+    ]);
+  });
+
   it("accepts the maintained 2025 Muhurat special session instead of treating it as a holiday", () => {
     const special = candle(`2025-10-21T13:45:00${IST}`);
     const result = normalizeCandles(

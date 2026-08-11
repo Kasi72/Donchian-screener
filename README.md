@@ -166,9 +166,9 @@ Expand **Details** on a BUY row to review the precise Donchian values, selected 
 ## Data integrity and operational safeguards
 
 - Only completed NSE-session candles can reach signal evaluation.
-- Yahoo zero-volume flat placeholders are removed before session validation and never count toward an automatic period.
+- Yahoo zero-volume flat placeholders and wholly empty OHLCV rows are removed before session validation and never count toward an automatic period. Partially malformed candles still fail closed.
 - Intraday timestamps must align with valid session intervals; the shortened final hourly bar closes at 15:30 IST.
-- Weekends, known holidays, and modeled special sessions are handled in Asia/Kolkata time.
+- Weekends, known holidays, and modeled special sessions are handled in Asia/Kolkata time. Yahoo hourly bars aligned to the regular grid are accepted only when their interval overlaps a modeled special-session window.
 - Historical aggregate candles can predate the maintained holiday calendar; the current expected close remains calendar-bound.
 - Partially malformed feeds fail closed as `INVALID_CANDLES` rather than dropping bad rows and continuing to a BUY.
 - All timeframes use raw OHLC. This is intentional: adjusted historical lows can change the protecting pivot and therefore the exact Donchian length.
