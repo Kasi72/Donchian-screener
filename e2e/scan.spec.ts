@@ -14,12 +14,12 @@ const REPLACEMENT_CSV = `Company Name,Industry,Symbol,Series,ISIN Code
 Infosys Ltd,IT Services,INFY,EQ,INE009A01021`;
 
 const CSV_HEADER =
-  "symbol,yahooSymbol,timeframe,status,recommendation,signalTime,autoPeriod,probability,entry,stop,target1,target2,currentLdc,previousLdc,anchorTime,strategyVersion,dataAsOf,adjustmentMode,tickSize,tickPolicy,reactionHigh,rewardRisk,scoreVersion,score,higherTimeframeInput,anchorRationale,companyName,industry,message";
+  "symbol,yahooSymbol,timeframe,status,recommendation,signalTime,autoPeriod,probability,entry,stop,target1,target2,currentLdc,previousLdc,anchorTime,strategyVersion,dataAsOf,adjustmentMode,tickSize,tickPolicy,reactionHigh,rewardRisk,scoreVersion,score,higherTimeframeInput,confirmationVersion,confirmationScore,confirmationGrade,closeLocation,lowerWickRatio,atrRecovery,volumeZScore,changePointScore,validPeriodCount,validPeriodMin,validPeriodMax,confirmationReasons,anchorRationale,companyName,industry,message";
 const RELIANCE_CSV_ROW =
-  "RELIANCE,RELIANCE.NS,1h,BUY,BUY,1786095900000,14,,102,94.52,109.48,116.96,95.02,90,1785923100000,rules-v1,1786095900000,RAW,0.01,nse-cm-price-band-2025-v1,116,1.8716577540106951,structural-v1,0.7895,NEUTRAL_UNAVAILABLE,\"Selected confirmed pivot low 14 bars earlier: prominence 5.36 ATR, recovery 7.74 ATR, structural-v1 score 0.7895. Higher-timeframe input is unavailable and contributes a neutral zero.\",Reliance Industries Ltd,Energy,";
-const TCS_CSV_ROW = "TCS,,,NO_SIGNAL,,,,,,,,,,,,,,,,,,,,,,,,,";
+  "RELIANCE,RELIANCE.NS,1h,BUY,BUY,1786095900000,14,,102,94.52,109.48,116.96,95.02,90,1785923100000,rules-v1,1786095900000,RAW,0.01,nse-cm-price-band-2025-v1,116,1.8716577540106951,structural-v1,0.7895,NEUTRAL_UNAVAILABLE,confirmation-v1,56,CORE_ONLY,0.5377503852080124,0.5377503852080124,1.3968572300566466,,0,1,14,14,signal low is aligned with the selected lower channel; lower-wick rejection is substantial; recovered at least 0.5 ATR from the low,\"Selected confirmed pivot low 14 bars earlier: prominence 5.36 ATR, recovery 7.74 ATR, structural-v1 score 0.7895. Higher-timeframe input is unavailable and contributes a neutral zero.\",Reliance Industries Ltd,Energy,";
+const TCS_CSV_ROW = "TCS,,,NO_SIGNAL,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,";
 const BROKEN_CSV_ROW =
-  "BROKEN,,,PROVIDER_ERROR,,,,,,,,,,,,,,,,,,,,,,,,,Market data provider failed for BROKEN.";
+  "BROKEN,,,PROVIDER_ERROR,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,Market data provider failed for BROKEN.";
 
 async function uploadPrimaryUniverse(page: Page): Promise<void> {
   await page.getByLabel("Upload stock list").setInputFiles({

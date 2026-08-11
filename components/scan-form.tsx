@@ -78,6 +78,28 @@ function hasFiniteScoreComponents(value: unknown): boolean {
     );
 }
 
+function isReversalConfirmation(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const range = value.validPeriodRange;
+  const validPeriodCount = value.validPeriodCount;
+  return (
+    value.version === "confirmation-v1" &&
+    (value.grade === "STRONG" || value.grade === "CONFIRMED" || value.grade === "CORE_ONLY") &&
+    isFiniteNumber(value.score) && value.score >= 0 && value.score <= 100 &&
+    isFiniteNumber(value.closeLocation) &&
+    isFiniteNumber(value.lowerWickRatio) &&
+    isFiniteNumber(value.atrRecovery) &&
+    (value.volumeZScore === null || isFiniteNumber(value.volumeZScore)) &&
+    isFiniteNumber(value.changePointScore) &&
+    isNonNegativeInteger(validPeriodCount) &&
+    Array.isArray(range) && range.length === 2 &&
+    Number.isInteger(range[0]) && Number.isInteger(range[1]) && range[0] <= range[1] &&
+    value.higherTimeframe === "UNAVAILABLE" &&
+    value.relativeStrength === "UNAVAILABLE" &&
+    Array.isArray(value.reasons) && value.reasons.every((reason) => typeof reason === "string")
+  );
+}
+
 function isUniverseInstrument(value: unknown): value is UniverseInstrument {
   if (!isRecord(value)) {
     return false;
@@ -149,6 +171,7 @@ function isBuyRecommendation(value: unknown, symbol: string): boolean {
     hasFiniteScoreComponents(value.scoreComponents) &&
     value.higherTimeframeInput === "NEUTRAL_UNAVAILABLE" &&
     typeof value.anchorRationale === "string" &&
+    (value.confirmation === undefined || isReversalConfirmation(value.confirmation)) &&
     isOptionalString(value.companyName) &&
     isOptionalString(value.industry)
   );

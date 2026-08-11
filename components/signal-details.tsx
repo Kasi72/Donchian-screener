@@ -30,6 +30,7 @@ export function SignalDetails({
   id: string;
   recommendation: BuyRecommendation;
 }) {
+  const confirmation = recommendation.confirmation;
   const fields = [
     ["Current Donchian low", formatPrice(recommendation.currentLdc)],
     ["Previous Donchian low", formatPrice(recommendation.previousLdc)],
@@ -43,6 +44,24 @@ export function SignalDetails({
     ["Planned reward/risk", recommendation.rewardRisk.toFixed(2)],
     ["Structural score", `${recommendation.score.toFixed(4)} (${recommendation.scoreVersion})`],
     ["Higher timeframe", "Neutral (input unavailable)"],
+    ...(confirmation
+      ? [
+          ["Reversal confirmation", `${confirmation.grade} (${confirmation.score.toFixed(2)}/100)`],
+          ["Close location", `${(confirmation.closeLocation * 100).toFixed(1)}%`],
+          ["Lower-wick rejection", `${(confirmation.lowerWickRatio * 100).toFixed(1)}%`],
+          ["ATR recovery", `${confirmation.atrRecovery.toFixed(2)} ATR`],
+          [
+            "Volume surprise",
+            confirmation.volumeZScore === null ? "Unavailable" : `${confirmation.volumeZScore.toFixed(2)} z-score`,
+          ],
+          ["Change-point score", confirmation.changePointScore.toFixed(2)],
+          [
+            "Stable periods",
+            `${confirmation.validPeriodRange[0]}–${confirmation.validPeriodRange[1]} (${confirmation.validPeriodCount} valid)`,
+          ],
+          ["Confirmation reasons", confirmation.reasons.join("; ")],
+        ]
+      : []),
     ["Anchor rationale", recommendation.anchorRationale],
     ["Strategy version", recommendation.strategyVersion],
   ];

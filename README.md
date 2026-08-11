@@ -16,6 +16,7 @@ Donchian Reversal Screener, by Dr KKR, is a completed-candle, bullish Donchian r
 - Per-symbol fault isolation, cancellation, bounded concurrency, retries, throttling, and caching
 - Sortable/filterable results with CSV export of the currently visible rows
 - Calculation details containing score lineage, adjustment mode, tick policy, and anchor rationale
+- Causal reversal confirmation diagnostics with a transparent 0–100 score and evidence reasons
 
 ## Strategy definition
 
@@ -56,6 +57,18 @@ The score records normalized pivot prominence, recovery, recency, retests, relat
 - **Target 2:** the farther structural/risk objective calculated by `rules-v1`
 
 The displayed entry is a reference, not a guaranteed fill. Actual execution occurs at the next obtainable price. Skip a gap that reduces reward/risk below your own minimum.
+
+### Reversal confirmation diagnostics
+
+Every `BUY` also receives a deterministic `confirmation-v1` diagnostic. It never uses future candles and does not replace the original `rules-v1` BUY gate. The score combines:
+
+- close location and lower-wick rejection geometry;
+- recovery from the low normalized by ATR(14);
+- robust volume surprise using a median/MAD baseline;
+- a causal CUSUM-like positive return impulse; and
+- stability of the Donchian rollover across nearby periods (`N-3` through `N+3`).
+
+Scores are labelled `STRONG` (75–100), `CONFIRMED` (60–74.99), or `CORE_ONLY` (below 60). Details show the component values and human-readable reasons, and the same fields are included in CSV export. Higher-timeframe and benchmark-relative-strength context are explicitly marked unavailable until the corresponding additional data is fetched; they are never guessed or silently substituted.
 
 ## Supported instruments
 
