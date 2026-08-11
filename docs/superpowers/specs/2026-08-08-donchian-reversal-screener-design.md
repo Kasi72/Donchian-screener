@@ -128,7 +128,8 @@ Recommended persistence is PostgreSQL/Supabase for scan records, accumulated can
 - Use Asia/Kolkata market-session boundaries.
 - Exclude pre/post-market data.
 - Store raw and adjusted status explicitly.
-- Use adjusted OHLC for daily-or-longer cash-equity research; use consistent raw intraday bars.
+- Use raw OHLC on every timeframe to preserve exact parity with the unadjusted TradingView Donchian chart used for strategy verification.
+- Remove zero-volume flat Yahoo placeholders before session validation; they are provider snapshots, not chart candles, and must not affect period distance.
 - Never convert a provider failure into `NO SIGNAL`.
 
 Required data statuses:

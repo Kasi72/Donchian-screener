@@ -12,7 +12,7 @@ Reversal Radar is a completed-candle, bullish Donchian reversal screener for NSE
 - Causal, structure-derived Donchian period selection—no arbitrary fixed `51` or `94`
 - Entry reference, protective stop, two targets, reaction high, and planned reward/risk
 - NSE tick-size policy, trading-session checks, holiday handling, and stale-data detection
-- Back-adjusted daily/weekly/monthly equity OHLC when Yahoo provides adjusted closes
+- Raw Yahoo OHLC across every timeframe so Donchian lengths match an unadjusted TradingView chart
 - Per-symbol fault isolation, cancellation, bounded concurrency, retries, throttling, and caching
 - Sortable/filterable results with CSV export of the currently visible rows
 - Calculation details containing score lineage, adjustment mode, tick policy, and anchor rationale
@@ -148,7 +148,7 @@ Every uploaded instrument receives a row. A missing BUY is not silently discarde
 | `PROVIDER_TIMEOUT` | Per-symbol data deadline expired |
 | `STALE_DATA` | Latest candle is older than the expected NSE completion |
 | `INVALID_CANDLES` | Malformed, off-session, mixed-adjustment, or otherwise invalid feed |
-| `DATA_QUALITY_LIMITATION` | Calendar/adjustment coverage cannot support a reliable calculation |
+| `DATA_QUALITY_LIMITATION` | Calendar/source coverage cannot support a reliable calculation |
 | `INVALID_INSTRUMENT` | Identity is unsupported or contract-like |
 | `TICK_SIZE_UNRESOLVED` | Required NSE tick metadata could not be determined |
 | `PROVIDER_ERROR` | Unexpected provider or evaluation failure isolated to that symbol |
@@ -166,12 +166,13 @@ Expand **Details** on a BUY row to review the precise Donchian values, selected 
 ## Data integrity and operational safeguards
 
 - Only completed NSE-session candles can reach signal evaluation.
+- Yahoo zero-volume flat placeholders are removed before session validation and never count toward an automatic period.
 - Intraday timestamps must align with valid session intervals; the shortened final hourly bar closes at 15:30 IST.
 - Weekends, known holidays, and modeled special sessions are handled in Asia/Kolkata time.
 - Historical aggregate candles can predate the maintained holiday calendar; the current expected close remains calendar-bound.
 - Partially malformed feeds fail closed as `INVALID_CANDLES` rather than dropping bad rows and continuing to a BUY.
-- Daily, weekly, and monthly equities use consistently back-adjusted OHLC when adjusted-close lineage is available.
-- Intraday candles and indices remain raw and are labelled in the recommendation details.
+- All timeframes use raw OHLC. This is intentional: adjusted historical lows can change the protecting pivot and therefore the exact Donchian length.
+- A monthly scan evaluates the latest completed month only. The forming current month cannot emit a BUY, so compare the result with the completed signal month shown under **Details**, not the live monthly candle.
 - Yahoo symbols are derived on the server from canonical inputs; client-provided provider symbols are not trusted.
 - Provider calls use bounded concurrency, global throttling, retries, caching, cancellation, and per-item deadlines.
 

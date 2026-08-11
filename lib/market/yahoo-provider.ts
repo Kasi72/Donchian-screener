@@ -94,9 +94,8 @@ function isRetryable(error: unknown): boolean {
   );
 }
 
-function adjustmentModeFor(symbol: string, timeframe: Timeframe): AdjustmentMode {
-  const isAggregate = timeframe === "1d" || timeframe === "1wk" || timeframe === "1mo";
-  return isAggregate && !symbol.startsWith("^") ? "BACK_ADJUSTED" : "RAW";
+function adjustmentModeFor(): AdjustmentMode {
+  return "RAW";
 }
 
 function wait(milliseconds: number, signal: AbortSignal): Promise<void> {
@@ -155,7 +154,7 @@ export class YahooMarketDataProvider implements MarketDataProvider {
     now: Date = new Date(),
     requestOptions?: MarketDataRequestOptions,
   ): Promise<CandleResponse> {
-    const adjustmentMode = adjustmentModeFor(symbol, timeframe);
+    const adjustmentMode = adjustmentModeFor();
     const expectedCompletion = latestExpectedNseCompletion(timeframe, now);
     const cacheKey = `${symbol}|${timeframe}|${adjustmentMode}|${String(expectedCompletion)}`;
     const cached = this.cache?.get(cacheKey);
