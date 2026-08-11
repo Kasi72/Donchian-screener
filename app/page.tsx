@@ -1,4 +1,5 @@
 import { ScanForm } from "@/components/scan-form";
+import { ThemeSelector } from "@/components/theme-selector";
 
 export default function Home() {
   return (
@@ -7,6 +8,7 @@ export default function Home() {
         <a className="brand" href="#main-content" aria-label="Reversal Radar home">
           Reversal Radar
         </a>
+        <ThemeSelector />
       </header>
       <div className="workspace" id="main-content">
         <div className="intro">

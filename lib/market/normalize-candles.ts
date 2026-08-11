@@ -79,6 +79,16 @@ function isValidQuote(quote: YahooCandle): quote is ValidYahooCandle {
   );
 }
 
+function isZeroVolumeFlatPlaceholder(quote: YahooCandle): boolean {
+  return (
+    quote.volume === 0 &&
+    typeof quote.open === "number" &&
+    quote.open === quote.high &&
+    quote.high === quote.low &&
+    quote.low === quote.close
+  );
+}
+
 function adjustedCandle(
   quote: ValidYahooCandle,
   adjustmentMode: AdjustmentMode,
@@ -132,11 +142,13 @@ export function normalizeCandles(
 ): CandleResponse {
   const adjustmentMode = options.adjustmentMode ?? "RAW";
   const calendar = options.calendar ?? NSE_TRADING_CALENDAR;
-  const parsedQuotes = quotes.map((quote, index) => ({
-    quote,
-    index,
-    time: quoteTime(quote),
-  }));
+  const parsedQuotes = quotes
+    .filter((quote) => !isZeroVolumeFlatPlaceholder(quote))
+    .map((quote, index) => ({
+      quote,
+      index,
+      time: quoteTime(quote),
+    }));
   const hasUnparseableTimestamp = parsedQuotes.some((candidate) => candidate.time === null);
   let hasInvalidSession = false;
   let hasUnsupportedCalendar = false;

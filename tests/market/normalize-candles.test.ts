@@ -178,6 +178,52 @@ describe("normalizeCandles", () => {
     expect(result.candles).toHaveLength(3);
   });
 
+  it("drops Yahoo zero-volume flat placeholders on an exchange holiday", () => {
+    const holidayPlaceholder = candle(`2026-05-01T09:15:00${IST}`, {
+      open: 318.35,
+      high: 318.35,
+      low: 318.35,
+      close: 318.35,
+      adjclose: 318.35,
+      volume: 0,
+    });
+    const valid = candle(`2026-08-07T09:15:00${IST}`, { adjclose: 103 });
+
+    const result = normalizeCandles(
+      [holidayPlaceholder, valid],
+      "1d",
+      new Date(`2026-08-07T16:00:00${IST}`),
+      { adjustmentMode: "BACK_ADJUSTED" },
+    );
+
+    expect(result.status).toBe("INSUFFICIENT_HISTORY");
+    expect(result.candles).toEqual([
+      expect.objectContaining({ time: valid.date.getTime() }),
+    ]);
+  });
+
+  it("drops Yahoo zero-volume flat live snapshots outside the hourly grid", () => {
+    const finalHour = candle(`2026-08-07T15:15:00${IST}`);
+    const closeSnapshot = candle(`2026-08-07T15:30:00${IST}`, {
+      open: 267.95,
+      high: 267.95,
+      low: 267.95,
+      close: 267.95,
+      volume: 0,
+    });
+
+    const result = normalizeCandles(
+      [finalHour, closeSnapshot],
+      "1h",
+      new Date(`2026-08-07T16:00:00${IST}`),
+    );
+
+    expect(result.status).toBe("INSUFFICIENT_HISTORY");
+    expect(result.candles).toEqual([
+      expect.objectContaining({ time: finalHour.date.getTime() }),
+    ]);
+  });
+
   it("accepts the maintained 2025 Muhurat special session instead of treating it as a holiday", () => {
     const special = candle(`2025-10-21T13:45:00${IST}`);
     const result = normalizeCandles(

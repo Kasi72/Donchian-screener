@@ -86,7 +86,7 @@ describe("YahooMarketDataProvider", () => {
       status: "SYMBOL_NOT_FOUND",
       candles: [],
       asOf: 0,
-      adjustmentMode: "BACK_ADJUSTED",
+      adjustmentMode: "RAW",
     });
   });
 
@@ -100,7 +100,7 @@ describe("YahooMarketDataProvider", () => {
       status: "PROVIDER_RATE_LIMITED",
       candles: [],
       asOf: 0,
-      adjustmentMode: "BACK_ADJUSTED",
+      adjustmentMode: "RAW",
     });
   });
 
@@ -115,7 +115,7 @@ describe("YahooMarketDataProvider", () => {
     );
   });
 
-  it("back-adjusts daily equities but keeps index candles raw", async () => {
+  it("keeps daily equity and index OHLC raw to match the source chart", async () => {
     const daily = [{
       date: new Date(`2026-08-07T09:15:00${IST}`),
       open: 100,
@@ -132,8 +132,8 @@ describe("YahooMarketDataProvider", () => {
     const index = await provider.getCandles("^NSEI", "1d", now);
 
     expect(equity).toMatchObject({
-      adjustmentMode: "BACK_ADJUSTED",
-      candles: [{ open: 50, high: 55, low: 45, close: 52.5 }],
+      adjustmentMode: "RAW",
+      candles: [{ open: 100, high: 110, low: 90, close: 105 }],
     });
     expect(index).toMatchObject({
       adjustmentMode: "RAW",
