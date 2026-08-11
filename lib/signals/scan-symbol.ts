@@ -12,6 +12,10 @@ import type {
 } from "@/lib/market/provider";
 import { selectRulesPeriod } from "./period-selector";
 import type { StructuralScoreComponents } from "./period-selector";
+import {
+  calculateReversalConfirmation,
+  type ReversalConfirmation,
+} from "./reversal-confirmation";
 import { calculateTradeLevels } from "./risk-levels";
 import {
   ATR_PERIOD,
@@ -49,6 +53,7 @@ export interface BuyRecommendation {
   scoreComponents: StructuralScoreComponents;
   higherTimeframeInput: "NEUTRAL_UNAVAILABLE";
   anchorRationale: string;
+  confirmation?: ReversalConfirmation;
   companyName?: string;
   industry?: string;
 }
@@ -198,6 +203,13 @@ export async function scanSymbol(
     if (levels === null) {
       return { symbol: instrument.symbol, status: "NO_SIGNAL" };
     }
+    const confirmation = calculateReversalConfirmation(
+      candleResponse.candles,
+      signalIndex,
+      selected.period,
+      selected.currentLdc,
+      tickResolution.tickSize,
+    );
 
     const recommendation: BuyRecommendation = {
       recommendation: "BUY",
@@ -226,6 +238,7 @@ export async function scanSymbol(
       scoreComponents: selected.scoreComponents,
       higherTimeframeInput: "NEUTRAL_UNAVAILABLE",
       anchorRationale: `Selected confirmed pivot low ${selected.period} bars earlier: prominence ${selected.anchor.prominenceAtr.toFixed(2)} ATR, recovery ${selected.anchor.recoveryAtr.toFixed(2)} ATR, ${selected.scoreVersion} score ${selected.score.toFixed(4)}. Higher-timeframe input is unavailable and contributes a neutral zero.`,
+      confirmation,
       ...(resolvedInstrument.companyName
         ? { companyName: resolvedInstrument.companyName }
         : {}),
