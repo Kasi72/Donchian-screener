@@ -145,10 +145,11 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
   });
   page.on("pageerror", (error) => runtimeErrors.push(error.message));
   await page.goto("/");
-  await expect(page).toHaveTitle("Adaptive Donchian Screener");
+  await expect(page).toHaveTitle("Donchian Reversal Screener | Dr KKR");
   await expect(
-    page.getByRole("heading", { name: "Find completed-candle bullish reversals" }),
+    page.getByRole("heading", { name: "Donchian Reversal Screener" }),
   ).toBeVisible();
+  await expect(page.getByText("by Dr KKR")).toBeVisible();
 
   await uploadPrimaryUniverse(page);
   const summary = page.getByRole("status", { name: "Stock list summary" });

@@ -1,6 +1,6 @@
-# Reversal Radar
+# Donchian Reversal Screener
 
-Reversal Radar is a completed-candle, bullish Donchian reversal screener for NSE cash equities and supported indices. It accepts an uploaded stock universe, retrieves OHLCV data from Yahoo Finance, selects a causal structural lookback for each instrument, and reports auditable BUY reference levels without hiding no-signal or data-quality outcomes.
+Donchian Reversal Screener, by Dr KKR, is a completed-candle, bullish Donchian reversal screener for NSE cash equities and supported indices. It accepts an uploaded stock universe, retrieves OHLCV data from Yahoo Finance, selects a causal structural lookback for each instrument, and reports auditable BUY reference levels without hiding no-signal or data-quality outcomes.
 
 > **Research software—not investment advice.** A `BUY` result means the deterministic `rules-v1` conditions were satisfied on a completed candle. It is not a promise of execution, profitability, or future performance.
 

@@ -5,7 +5,7 @@ import { THEME_BOOTSTRAP } from "@/lib/theme/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Adaptive Donchian Screener",
+  title: "Donchian Reversal Screener | Dr KKR",
   description: "A rule-based Donchian reversal screener.",
 };
 
