@@ -578,7 +578,9 @@ export function ScanForm() {
               obtainable price; skip a gap that reduces reward/risk below your minimum. Each scan
               evaluates only the latest completed candle, so a BUY from an earlier scan naturally
               disappears when that symbol no longer qualifies on the newer candle. Confirmation
-              diagnostics are informational and never suppress a core rules BUY.
+              diagnostics are informational and never suppress a core rules BUY. For weekly and
+              monthly scans, compare the chart with the completed signal candle shown in Details;
+              TradingView's currently forming week/month is intentionally excluded.
             </p>
             {categoryResults.length > 0 ? (
               <ScanResults results={categoryResults} onProjectionChange={setProjection} />
