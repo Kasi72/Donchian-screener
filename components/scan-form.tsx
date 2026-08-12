@@ -575,7 +575,10 @@ export function ScanForm() {
           <>
             <p className="execution-caveat">
               Entry reference is the completed signal candle close. Actual execution is the next
-              obtainable price; skip a gap that reduces reward/risk below your minimum.
+              obtainable price; skip a gap that reduces reward/risk below your minimum. Each scan
+              evaluates only the latest completed candle, so a BUY from an earlier scan naturally
+              disappears when that symbol no longer qualifies on the newer candle. Confirmation
+              diagnostics are informational and never suppress a core rules BUY.
             </p>
             {categoryResults.length > 0 ? (
               <ScanResults results={categoryResults} onProjectionChange={setProjection} />

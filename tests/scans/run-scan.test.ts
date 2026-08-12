@@ -136,6 +136,8 @@ describe("scanSymbol", () => {
       },
     });
     expect(result.recommendation?.stop).toBeLessThan(102);
+    expect(result.recommendation?.confirmation?.version).toBe("confirmation-v1");
+    expect(result.recommendation?.confirmation?.grade).toBe("CORE_ONLY");
     expect(result.recommendation?.target1).toBeGreaterThan(102);
     expect(result.recommendation?.target2).toBeGreaterThan(
       result.recommendation?.target1 ?? Number.POSITIVE_INFINITY,
