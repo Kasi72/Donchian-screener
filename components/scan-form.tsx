@@ -580,7 +580,7 @@ export function ScanForm() {
               disappears when that symbol no longer qualifies on the newer candle. Confirmation
               diagnostics are informational and never suppress a core rules BUY. For weekly and
               monthly scans, compare the chart with the completed signal candle shown in Details;
-              TradingView's currently forming week/month is intentionally excluded.
+              TradingView&apos;s currently forming week/month is intentionally excluded.
             </p>
             {categoryResults.length > 0 ? (
               <ScanResults results={categoryResults} onProjectionChange={setProjection} />
