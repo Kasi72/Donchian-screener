@@ -141,6 +141,68 @@ describe("YahooMarketDataProvider", () => {
     });
   });
 
+  it("repairs a completed daily row whose Yahoo close is null using the completed market price", async () => {
+    const client: YahooChartClient = {
+      chart: vi.fn().mockResolvedValue({
+        quotes: [
+          {
+            date: new Date(`2026-08-12T09:15:00${IST}`),
+            open: 100, high: 105, low: 99, close: 103, adjclose: 103, volume: 1_000,
+          },
+          {
+            date: new Date(`2026-08-13T09:15:00${IST}`),
+            open: 103, high: 106, low: 102, close: null, adjclose: null, volume: 1_200,
+          },
+        ],
+        meta: {
+          regularMarketTime: new Date(`2026-08-13T15:30:00${IST}`),
+          regularMarketPrice: 105,
+        },
+      }),
+    };
+    const provider = new YahooMarketDataProvider({ client, maxAttempts: 1 });
+
+    const result = await provider.getCandles(
+      "ACC.NS",
+      "1d",
+      new Date(`2026-08-14T12:00:00${IST}`),
+    );
+
+    expect(result.status).toBe("INSUFFICIENT_HISTORY");
+    expect(result.candles.at(-1)).toMatchObject({ low: 102, close: 105 });
+  });
+
+  it("does not promote an actively forming daily row from the market price", async () => {
+    const client: YahooChartClient = {
+      chart: vi.fn().mockResolvedValue({
+        quotes: [
+          {
+            date: new Date(`2026-08-12T09:15:00${IST}`),
+            open: 100, high: 105, low: 99, close: 103, volume: 1_000,
+          },
+          {
+            date: new Date(`2026-08-13T09:15:00${IST}`),
+            open: 103, high: 106, low: 102, close: null, volume: 1_200,
+          },
+        ],
+        meta: {
+          regularMarketTime: new Date(`2026-08-13T15:15:00${IST}`),
+          regularMarketPrice: 105,
+        },
+      }),
+    };
+    const provider = new YahooMarketDataProvider({ client, maxAttempts: 1 });
+
+    const result = await provider.getCandles(
+      "POWERGRID.NS",
+      "1d",
+      new Date(`2026-08-13T15:20:00${IST}`),
+    );
+
+    expect(result.status).toBe("INSUFFICIENT_HISTORY");
+    expect(result.candles.at(-1)).toMatchObject({ low: 99, close: 103 });
+  });
+
   it.each([600, "503"])(
     "does not classify non-numeric-5xx status %j as transient",
     async (status) => {
