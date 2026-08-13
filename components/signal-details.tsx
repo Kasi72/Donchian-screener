@@ -31,9 +31,16 @@ export function SignalDetails({
   recommendation: BuyRecommendation;
 }) {
   const confirmation = recommendation.confirmation;
+  const channelRollover = recommendation.currentLdc > recommendation.previousLdc;
   const fields = [
     ["Current Donchian low", formatPrice(recommendation.currentLdc)],
     ["Previous Donchian low", formatPrice(recommendation.previousLdc)],
+    [
+      "Donchian reversal gate",
+      channelRollover
+        ? "PASS — signal low touches the current LDC and the LDC has risen"
+        : "FAIL — the channel is flat/falling; a touch alone is not a BUY",
+    ],
     ["Signal candle", dateFormatter.format(recommendation.signalTime)],
     ["Confirmed pivot anchor", dateFormatter.format(recommendation.anchorTime)],
     ["Yahoo symbol", recommendation.yahooSymbol],
