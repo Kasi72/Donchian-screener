@@ -28,6 +28,7 @@ export interface NormalizeCandlesOptions {
 }
 
 export const MINIMUM_CANDLE_COUNT = 100;
+const DAY_MS = 24 * 60 * 60_000;
 
 type ValidYahooCandle = Omit<
   YahooCandle,
@@ -189,8 +190,24 @@ export function normalizeCandles(
 
   const unique = new Map<number, Omit<Candle, "time">>();
   let hasInvalidPayload = false;
+  let ignoredLatestPartial = false;
+  const latestCandidateTime = candidates.at(-1)?.time;
+  const validPayloadTimes = new Set(
+    candidates
+      .filter((candidate) => isValidQuote(candidate.quote) && adjustedCandle(candidate.quote, adjustmentMode) !== undefined)
+      .map((candidate) => candidate.time),
+  );
   for (const candidate of candidates) {
     if (!isValidQuote(candidate.quote)) {
+      // Yahoo occasionally returns the newest daily/aggregate row with a
+      // null close while the older completed history is valid. It is a
+      // forming provider snapshot, not evidence that the completed feed is
+      // corrupt. Preserve strict rejection for malformed older rows and for
+      // malformed duplicates that share a timestamp with a valid quote.
+      if (candidate.time === latestCandidateTime && !validPayloadTimes.has(candidate.time)) {
+        ignoredLatestPartial = true;
+        continue;
+      }
       hasInvalidPayload = true;
       continue;
     }
@@ -215,7 +232,15 @@ export function normalizeCandles(
   const asOf = candles.at(-1)?.time ?? 0;
   const expectedCompletion = latestExpectedNseCompletion(timeframe, now, calendar)!;
   const actualCompletion = asOf === 0 ? undefined : nseCandleCompletion(asOf, timeframe, calendar);
-  if (asOf !== 0 && (actualCompletion === undefined || actualCompletion < expectedCompletion)) {
+  const partialSnapshotLagAllowed =
+    ignoredLatestPartial &&
+    actualCompletion !== undefined &&
+    expectedCompletion - actualCompletion <= 3 * DAY_MS;
+  if (
+    asOf !== 0 &&
+    (actualCompletion === undefined ||
+      (actualCompletion < expectedCompletion && !partialSnapshotLagAllowed))
+  ) {
     return response("STALE_DATA", candles, adjustmentMode);
   }
 

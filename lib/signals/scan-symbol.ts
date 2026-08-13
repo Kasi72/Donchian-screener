@@ -16,6 +16,11 @@ import {
   calculateReversalConfirmation,
   type ReversalConfirmation,
 } from "./reversal-confirmation";
+import {
+  calculateSequentialEvidence,
+  type ReversalState,
+  type SequentialEvidence,
+} from "./sequential-evidence";
 import { calculateTradeLevels } from "./risk-levels";
 import {
   ATR_PERIOD,
@@ -54,6 +59,9 @@ export interface BuyRecommendation {
   higherTimeframeInput: "NEUTRAL_UNAVAILABLE";
   anchorRationale: string;
   confirmation?: ReversalConfirmation;
+  /** Causal evidence state; the Donchian gate remains the hard BUY condition. */
+  signalState?: ReversalState;
+  sequentialEvidence?: SequentialEvidence;
   companyName?: string;
   industry?: string;
 }
@@ -210,6 +218,10 @@ export async function scanSymbol(
       selected.currentLdc,
       tickResolution.tickSize,
     );
+    const sequentialEvidence = calculateSequentialEvidence(
+      candleResponse.candles,
+      signalIndex,
+    );
 
     const recommendation: BuyRecommendation = {
       recommendation: "BUY",
@@ -239,6 +251,8 @@ export async function scanSymbol(
       higherTimeframeInput: "NEUTRAL_UNAVAILABLE",
       anchorRationale: `Selected confirmed pivot low ${selected.period} bars earlier: prominence ${selected.anchor.prominenceAtr.toFixed(2)} ATR, recovery ${selected.anchor.recoveryAtr.toFixed(2)} ATR, ${selected.scoreVersion} score ${selected.score.toFixed(4)}. Higher-timeframe input is unavailable and contributes a neutral zero.`,
       confirmation,
+      signalState: sequentialEvidence.state,
+      sequentialEvidence,
       ...(resolvedInstrument.companyName
         ? { companyName: resolvedInstrument.companyName }
         : {}),

@@ -109,6 +109,18 @@ describe("normalizeCandles", () => {
     });
   });
 
+  it("ignores a newer Yahoo partial snapshot when older completed candles are valid", () => {
+    const now = new Date(`2026-08-14T12:00:00${IST}`);
+    const completed = candle(`2026-08-12T09:15:00${IST}`);
+    const partialLatest = candle(`2026-08-13T09:15:00${IST}`, { close: null, volume: 9_704_703 });
+
+    const result = normalizeCandles([completed, partialLatest], "1d", now);
+
+    expect(result.status).toBe("INSUFFICIENT_HISTORY");
+    expect(result.candles).toHaveLength(1);
+    expect(result.candles[0].time).toBe(completed.date.getTime());
+  });
+
   it("reports invalid candles for a nonempty feed with only unparseable timestamps", () => {
     const now = new Date(`2026-08-10T12:00:00${IST}`);
 

@@ -51,6 +51,27 @@ export function SignalDetails({
     ["Planned reward/risk", recommendation.rewardRisk.toFixed(2)],
     ["Structural score", `${recommendation.score.toFixed(4)} (${recommendation.scoreVersion})`],
     ["Higher timeframe", "Neutral (input unavailable)"],
+    ...(recommendation.sequentialEvidence
+      ? [
+          ["Signal state", recommendation.signalState ?? recommendation.sequentialEvidence.state],
+          [
+            "Sequential evidence score",
+            `${(recommendation.sequentialEvidence.reversalScore * 100).toFixed(1)}% (${recommendation.sequentialEvidence.calibration})`,
+          ],
+          ...(recommendation.sequentialEvidence.calibratedProbability === null
+            ? []
+            : [[
+                "Calibrated reversal probability",
+                `${(recommendation.sequentialEvidence.calibratedProbability * 100).toFixed(1)}%`,
+              ]]),
+          ["CUSUM evidence", `${(recommendation.sequentialEvidence.cusumScore * 100).toFixed(1)}%`],
+          [
+            "Bayesian change-point evidence",
+            `${(recommendation.sequentialEvidence.changePointProbability * 100).toFixed(1)}%`,
+          ],
+          ["Causal evidence model", recommendation.sequentialEvidence.version],
+        ]
+      : []),
     ...(confirmation
       ? [
           ["Reversal confirmation", `${confirmation.grade} (${confirmation.score.toFixed(2)}/100)`],
