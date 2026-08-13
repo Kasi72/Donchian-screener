@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Candle } from "@/lib/market/provider";
 import {
+  isExactPeriodCandidate,
   selectHighestPeriodCandidate,
   selectRulesPeriod,
   structuralScore,
@@ -33,6 +34,22 @@ function candidateFixture(): Candle[] {
 }
 
 describe("rules period selection", () => {
+  it("rejects a candidate whose period does not reproduce both Donchian windows", () => {
+    const candles = candidateFixture();
+    const result = selectRulesPeriod(candles, 30, 0.05);
+    const selected = result.selected!;
+
+    expect(isExactPeriodCandidate(candles, 30, selected, 0.05)).toBe(true);
+    expect(
+      isExactPeriodCandidate(
+        candles,
+        30,
+        { ...selected, period: selected.period + 1 },
+        0.05,
+      ),
+    ).toBe(false);
+  });
+
   it("freezes the exact structural-v1 score for a hand-calculated fixture", () => {
     const candles = Array.from({ length: 21 }, (_, index) =>
       candle(index, 99, 101, 100, index === 14 ? 200 : 100),

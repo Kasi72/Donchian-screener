@@ -10,7 +10,10 @@ import type {
   MarketDataProvider,
   Timeframe,
 } from "@/lib/market/provider";
-import { selectRulesPeriod } from "./period-selector";
+import {
+  isExactPeriodCandidate,
+  selectRulesPeriod,
+} from "./period-selector";
 import type { StructuralScoreComponents } from "./period-selector";
 import {
   calculateReversalConfirmation,
@@ -220,6 +223,16 @@ export async function scanSymbol(
     }
 
     const selected = selection.selected;
+    if (
+      !isExactPeriodCandidate(
+        candleResponse.candles,
+        signalIndex,
+        selected,
+        tickResolution.tickSize,
+      )
+    ) {
+      return { symbol: instrument.symbol, status: "NO_SIGNAL" };
+    }
     const levels = calculateTradeLevels(
       candleResponse.candles,
       signalIndex,

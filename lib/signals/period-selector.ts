@@ -160,6 +160,38 @@ export function selectHighestPeriodCandidate(
   return selected;
 }
 
+/**
+ * Defense-in-depth check for the exact period/window contract exported to users.
+ * A candidate is valid only when recomputing its period reproduces both
+ * Donchian windows and the tick-normalized rollover gate at the signal bar.
+ */
+export function isExactPeriodCandidate(
+  candles: Candle[],
+  signalIndex: number,
+  candidate: PeriodCandidate,
+  tickSize: number,
+): boolean {
+  if (!Number.isInteger(candidate.period) || candidate.period <= 0) {
+    return false;
+  }
+  try {
+    const rollover = bullishRollover(
+      candles,
+      signalIndex,
+      candidate.period,
+      tickSize,
+    );
+    const toTicks = (value: number): number => Math.round(value / tickSize);
+    return (
+      rollover.passed &&
+      toTicks(rollover.currentLdc) === toTicks(candidate.currentLdc) &&
+      toTicks(rollover.previousLdc) === toTicks(candidate.previousLdc)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function selectRulesPeriod(
   candles: Candle[],
   signalIndex: number,
