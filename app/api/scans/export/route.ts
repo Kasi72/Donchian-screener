@@ -41,6 +41,8 @@ const CSV_HEADERS = [
   "rolloverTicks",
   "touchDistanceTicks",
   "periodCandidateCount",
+  "periodAudit",
+  "windowAudit",
   "anchorIndex",
   "anchorBarsAgo",
   "anchorTime",
@@ -102,6 +104,23 @@ const recommendationSchema = z.object({
   rolloverTicks: z.number().int().nonnegative().optional(),
   touchDistanceTicks: z.number().int().nonnegative().optional(),
   periodCandidateCount: z.number().int().positive().optional(),
+  periodAudit: z.array(z.object({
+    period: z.number().int().positive(),
+    currentLdc: z.number().finite().nullable(),
+    previousLdc: z.number().finite().nullable(),
+    currentLdcTick: z.number().int().nonnegative().nullable(),
+    previousLdcTick: z.number().int().nonnegative().nullable(),
+    signalLowTick: z.number().int().nonnegative().nullable(),
+    touchPassed: z.boolean(),
+    rolloverPassed: z.boolean(),
+    valid: z.boolean(),
+  })).optional(),
+  windowAudit: z.object({
+    expectedSessions: z.number().int().nonnegative(),
+    observedSessions: z.number().int().nonnegative(),
+    missingSessions: z.number().int().nonnegative(),
+    complete: z.boolean(),
+  }).optional(),
   anchorIndex: z.number().int().nonnegative().optional(),
   anchorBarsAgo: z.number().int().positive().optional(),
   anchorTime: z.number().finite(),
@@ -231,6 +250,12 @@ export function scanResultsToCsv(results: readonly ScanItemResult[]): string {
       rolloverTicks: recommendation?.rolloverTicks,
       touchDistanceTicks: recommendation?.touchDistanceTicks,
       periodCandidateCount: recommendation?.periodCandidateCount,
+      periodAudit: recommendation?.periodAudit
+        ? JSON.stringify(recommendation.periodAudit)
+        : undefined,
+      windowAudit: recommendation?.windowAudit
+        ? JSON.stringify(recommendation.windowAudit)
+        : undefined,
       anchorIndex: recommendation?.anchorIndex,
       anchorBarsAgo: recommendation?.anchorBarsAgo,
       anchorTime: recommendation?.anchorTime,

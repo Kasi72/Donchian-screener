@@ -11,10 +11,16 @@ import type {
   Timeframe,
 } from "@/lib/market/provider";
 import {
+  auditDailyCandleWindow,
+  type DailyCandleWindowAudit,
+} from "@/lib/market/window-audit";
+import {
+  auditPeriodNeighborhood,
   isExactPeriodCandidate,
+  isUniquePeriodSelection,
   selectRulesPeriod,
 } from "./period-selector";
-import type { StructuralScoreComponents } from "./period-selector";
+import type { PeriodAudit, StructuralScoreComponents } from "./period-selector";
 import {
   calculateReversalConfirmation,
   type ReversalConfirmation,
@@ -61,6 +67,8 @@ export interface BuyRecommendation {
   rolloverTicks?: number;
   touchDistanceTicks?: number;
   periodCandidateCount?: number;
+  periodAudit?: PeriodAudit[];
+  windowAudit?: DailyCandleWindowAudit;
   anchorIndex?: number;
   anchorBarsAgo?: number;
   anchorTime: number;
@@ -221,6 +229,13 @@ export async function scanSymbol(
     if (selection.selected === undefined) {
       return { symbol: instrument.symbol, status: "NO_SIGNAL" };
     }
+    if (!isUniquePeriodSelection(selection.candidates)) {
+      return {
+        symbol: instrument.symbol,
+        status: "NO_SIGNAL",
+        message: `Ambiguous Donchian period: ${selection.candidates.length} valid periods found.`,
+      };
+    }
 
     const selected = selection.selected;
     if (
@@ -232,6 +247,21 @@ export async function scanSymbol(
       )
     ) {
       return { symbol: instrument.symbol, status: "NO_SIGNAL" };
+    }
+    const windowAudit =
+      timeframe === "1d"
+        ? auditDailyCandleWindow(
+            candleResponse.candles,
+            signalIndex - selected.period + 1,
+            signalIndex,
+          )
+        : undefined;
+    if (windowAudit !== undefined && !windowAudit.complete) {
+      return {
+        symbol: instrument.symbol,
+        status: "NO_SIGNAL",
+        message: `Incomplete daily Donchian window: ${windowAudit.missingSessions} NSE session(s) missing.`,
+      };
     }
     const levels = calculateTradeLevels(
       candleResponse.candles,
@@ -290,6 +320,13 @@ export async function scanSymbol(
             Math.round(selected.currentLdc / tickResolution.tickSize),
         ),
       periodCandidateCount: selection.candidates.length,
+      periodAudit: auditPeriodNeighborhood(
+        candleResponse.candles,
+        signalIndex,
+        selected.period,
+        tickResolution.tickSize,
+      ),
+      ...(windowAudit ? { windowAudit } : {}),
       anchorIndex: selected.anchor.index,
       anchorBarsAgo: signalIndex - selected.anchor.index,
       anchorTime: selected.anchor.time,

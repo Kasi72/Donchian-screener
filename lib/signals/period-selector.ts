@@ -18,6 +18,18 @@ export interface PeriodCandidate {
   previousLdc: number;
 }
 
+export interface PeriodAudit {
+  period: number;
+  currentLdc: number | null;
+  previousLdc: number | null;
+  currentLdcTick: number | null;
+  previousLdcTick: number | null;
+  signalLowTick: number | null;
+  touchPassed: boolean;
+  rolloverPassed: boolean;
+  valid: boolean;
+}
+
 export interface StructuralScoreComponents {
   prominence: number;
   recovery: number;
@@ -158,6 +170,63 @@ export function selectHighestPeriodCandidate(
     }
   }
   return selected;
+}
+
+export function isUniquePeriodSelection(candidates: PeriodCandidate[]): boolean {
+  return candidates.length === 1;
+}
+
+export function auditPeriodNeighborhood(
+  candles: Candle[],
+  signalIndex: number,
+  selectedPeriod: number,
+  tickSize: number,
+  radius = 2,
+): PeriodAudit[] {
+  if (!Number.isInteger(selectedPeriod) || selectedPeriod <= 0) return [];
+  const toTicks = (value: number): number => Math.round(value / tickSize);
+  const signalLowTick =
+    signalIndex >= 0 && signalIndex < candles.length
+      ? toTicks(candles[signalIndex].low)
+      : null;
+  const audits: PeriodAudit[] = [];
+  for (
+    let period = Math.max(1, selectedPeriod - Math.max(0, Math.floor(radius)));
+    period <= selectedPeriod + Math.max(0, Math.floor(radius));
+    period += 1
+  ) {
+    try {
+      const rollover = bullishRollover(candles, signalIndex, period, tickSize);
+      const currentLdcTick = toTicks(rollover.currentLdc);
+      const previousLdcTick = toTicks(rollover.previousLdc);
+      const touchPassed = signalLowTick !== null && signalLowTick === currentLdcTick;
+      const rolloverPassed = currentLdcTick > previousLdcTick;
+      audits.push({
+        period,
+        currentLdc: rollover.currentLdc,
+        previousLdc: rollover.previousLdc,
+        currentLdcTick,
+        previousLdcTick,
+        signalLowTick,
+        touchPassed,
+        rolloverPassed,
+        valid: touchPassed && rolloverPassed,
+      });
+    } catch {
+      audits.push({
+        period,
+        currentLdc: null,
+        previousLdc: null,
+        currentLdcTick: null,
+        previousLdcTick: null,
+        signalLowTick,
+        touchPassed: false,
+        rolloverPassed: false,
+        valid: false,
+      });
+    }
+  }
+  return audits;
 }
 
 /**

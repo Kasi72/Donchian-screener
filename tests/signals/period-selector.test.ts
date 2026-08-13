@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Candle } from "@/lib/market/provider";
 import {
+  auditPeriodNeighborhood,
   isExactPeriodCandidate,
+  isUniquePeriodSelection,
   selectHighestPeriodCandidate,
   selectRulesPeriod,
   structuralScore,
@@ -34,6 +36,25 @@ function candidateFixture(): Candle[] {
 }
 
 describe("rules period selection", () => {
+  it("marks a period as uniquely valid only when no competing candidate exists", () => {
+    const result = selectRulesPeriod(candidateFixture(), 30, 0.05);
+    expect(isUniquePeriodSelection(result.candidates)).toBe(true);
+    expect(isUniquePeriodSelection([...result.candidates, { ...result.selected!, period: 15 }])).toBe(false);
+  });
+
+  it("audits the selected period and its N±2 neighbours", () => {
+    const candles = candidateFixture();
+    const result = selectRulesPeriod(candles, 30, 0.05);
+    const audit = auditPeriodNeighborhood(candles, 30, result.selected!.period, 0.05);
+
+    expect(audit.map(({ period }) => period)).toEqual([12, 13, 14, 15, 16]);
+    expect(audit.find(({ period }) => period === 14)).toMatchObject({
+      valid: true,
+      touchPassed: true,
+      rolloverPassed: true,
+    });
+  });
+
   it("rejects a candidate whose period does not reproduce both Donchian windows", () => {
     const candles = candidateFixture();
     const result = selectRulesPeriod(candles, 30, 0.05);

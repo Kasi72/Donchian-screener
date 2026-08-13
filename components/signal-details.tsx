@@ -47,6 +47,24 @@ export function SignalDetails({
     ["Candle timeframe", recommendation.timeframe],
     ["Price adjustment", recommendation.adjustmentMode],
     ["Tick size / policy", `${recommendation.tickSize} / ${recommendation.tickPolicy}`],
+    ...(recommendation.periodAudit
+      ? [[
+          "Period audit (N±2)",
+          recommendation.periodAudit
+            .map(({ period, touchPassed, rolloverPassed, valid }) =>
+              `${period}:${valid ? "VALID" : `${touchPassed ? "touch" : "no-touch"}/${rolloverPassed ? "rollover" : "no-rollover"}`}`,
+            )
+            .join(" | "),
+        ]]
+      : []),
+    ...(recommendation.windowAudit
+      ? [[
+          "Daily window integrity",
+          recommendation.windowAudit.complete
+            ? `${recommendation.windowAudit.observedSessions}/${recommendation.windowAudit.expectedSessions} NSE sessions present`
+            : `${recommendation.windowAudit.missingSessions} NSE sessions missing`,
+        ]]
+      : []),
     ["Reaction high", formatPrice(recommendation.reactionHigh)],
     ["Planned reward/risk", recommendation.rewardRisk.toFixed(2)],
     ["Structural score", `${recommendation.score.toFixed(4)} (${recommendation.scoreVersion})`],

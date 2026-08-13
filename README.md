@@ -17,6 +17,8 @@ Donchian Reversal Screener, by Dr KKR, is a completed-candle, bullish Donchian r
 - Sortable/filterable results with CSV export of the currently visible rows
 - Calculation details containing score lineage, adjustment mode, tick policy, and anchor rationale
 - Causal reversal confirmation diagnostics with a transparent 0–100 score and evidence reasons
+- Unique-period enforcement: ambiguous Donchian lengths fail closed instead of being ranked into a BUY
+- N±2 period audit and daily NSE-session completeness diagnostics in Details and CSV export
 
 ## Strategy definition
 
@@ -44,8 +46,9 @@ The application does not search arbitrary periods until it finds a match. That w
 1. Identifies independently confirmed pivot-low anchors using only information available by the signal candle.
 2. Converts each eligible anchor's distance from the signal candle into a candidate period.
 3. Tests the Donchian rollover for those structural candidates.
-4. Ranks valid candidates with the versioned `structural-v1` score.
-5. Selects the highest-ranked candidate using deterministic tie-breaks.
+4. Requires exactly one valid candidate. If multiple independently anchored periods satisfy the rule, the result is `NO_SIGNAL` with an ambiguity diagnostic.
+5. Recomputes the selected candidate's windows at tick precision before emitting BUY.
+6. Records an N±2 period audit so neighboring lengths show their touch and rollover outcomes.
 
 The score records normalized pivot prominence, recovery, recency, retests, relative volume, and a neutral higher-timeframe component. Higher-timeframe agreement is explicitly unavailable in this release and contributes zero—it is not silently inferred.
 
@@ -179,6 +182,7 @@ Expand **Details** on a BUY row to review the precise Donchian values, selected 
 ## Data integrity and operational safeguards
 
 - Only completed NSE-session candles can reach signal evaluation.
+- Daily Donchian windows must contain every expected NSE session between their endpoints; missing sessions fail closed rather than shifting the period silently.
 - Yahoo zero-volume flat placeholders and wholly empty OHLCV rows are removed before session validation and never count toward an automatic period. Partially malformed candles still fail closed.
 - Intraday timestamps must align with valid session intervals; the shortened final hourly bar closes at 15:30 IST.
 - Weekends, known holidays, and modeled special sessions are handled in Asia/Kolkata time. Yahoo hourly bars aligned to the regular grid are accepted only when their interval overlaps a modeled special-session window.
@@ -188,6 +192,7 @@ Expand **Details** on a BUY row to review the precise Donchian values, selected 
 - A monthly scan evaluates the latest completed month only. The forming current month cannot emit a BUY, so compare the result with the completed signal month shown under **Details**, not the live monthly candle.
 - Yahoo symbols are derived on the server from canonical inputs; client-provided provider symbols are not trusted.
 - Provider calls use bounded concurrency, global throttling, retries, caching, cancellation, and per-item deadlines.
+- Every BUY export includes the selected period audit, window timestamps, tick values, and session-integrity metadata needed to reproduce the calculation.
 
 ## Verification
 
