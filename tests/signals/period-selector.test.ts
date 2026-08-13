@@ -20,9 +20,8 @@ function candle(
 function candidateFixture(): Candle[] {
   const candles = Array.from({ length: 31 }, (_, index) => candle(index));
 
-  // Both anchors are fully confirmed before t=30. The sub-tick raw rise from
-  // the newer anchor to the signal permits both anchored periods to satisfy
-  // the exact rollover rule without scanning unrelated integer periods.
+  // Both anchors are fully confirmed before t=30. The newer candidate is
+  // deliberately sub-tick and must be rejected by the tradable-tick gate.
   candles[16] = candle(16, 90, 110, 100, 2_000);
   candles[17] = candle(17, 108, 114, 112);
   candles[18] = candle(18, 109, 116, 114);
@@ -82,16 +81,12 @@ describe("rules period selection", () => {
     );
   });
 
-  it("selects the candidate with the highest frozen structural score", () => {
+  it("selects the only candidate with a tradable-tick rollover", () => {
     const result = selectRulesPeriod(candidateFixture(), 30, 0.05);
 
     expect(result.candidates.map((candidate) => candidate.anchor.index)).toEqual([
       16,
-      22,
     ]);
-    expect(result.candidates[0].score).toBeGreaterThan(
-      result.candidates[1].score,
-    );
     expect(result.selected?.anchor.index).toBe(16);
     expect(result.selected?.score).toBe(result.candidates[0].score);
     expect(result.selected).toMatchObject({

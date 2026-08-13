@@ -80,7 +80,7 @@ describe("Donchian lower channel", () => {
     expect(bullishRollover(candles, 3, 3, 0.05).passed).toBe(false);
   });
 
-  it("uses raw channel values for the rise even when both occupy the same tick", () => {
+  it("does not treat a sub-tick channel change as a genuine rollover", () => {
     const candles = [
       candle(0, 100.11),
       candle(1, 100.12),
@@ -89,9 +89,24 @@ describe("Donchian lower channel", () => {
     ];
 
     expect(bullishRollover(candles, 3, 3, 0.05)).toEqual({
-      passed: true,
+      passed: false,
       currentLdc: 100.12,
       previousLdc: 100.11,
+    });
+  });
+
+  it("rejects a lower-channel touch when the previous lower channel is unchanged", () => {
+    const candles = [
+      candle(0, 100),
+      candle(1, 100),
+      candle(2, 105),
+      candle(3, 100),
+    ];
+
+    expect(bullishRollover(candles, 3, 3, 0.05)).toEqual({
+      passed: false,
+      currentLdc: 100,
+      previousLdc: 100,
     });
   });
 
