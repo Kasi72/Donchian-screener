@@ -140,6 +140,15 @@ describe("scanSymbol", () => {
     expect(result.recommendation?.confirmation?.grade).toBe("CORE_ONLY");
     expect(result.recommendation?.signalState).toMatch(/EARLIEST_CANDIDATE|CONFIRMED_REVERSAL/);
     expect(result.recommendation?.sequentialEvidence?.version).toBe("sequential-v1");
+    expect(result.recommendation?.signalLow).toBe(95.02);
+    expect(result.recommendation?.signalClose).toBe(102);
+    expect(result.recommendation?.signalLowTick).toBe(1900);
+    expect(result.recommendation?.currentLdcTick).toBe(1900);
+    expect(result.recommendation?.previousLdcTick).toBe(1800);
+    expect(result.recommendation?.touchDistanceTicks).toBe(0);
+    expect(result.recommendation?.rolloverTicks).toBe(100);
+    expect(result.recommendation?.windowEndTime).toBe(result.recommendation?.signalTime);
+    expect(result.recommendation?.providerAsOf).toBe(result.recommendation?.dataAsOf);
     expect(result.recommendation?.target1).toBeGreaterThan(102);
     expect(result.recommendation?.target2).toBeGreaterThan(
       result.recommendation?.target1 ?? Number.POSITIVE_INFINITY,
@@ -405,7 +414,26 @@ async function exportedRows(results: ScanItemResult[]): Promise<{
 
 describe("scan CSV export", () => {
   it("exports autoPeriod, every price level, version, and data timestamp as valid CSV", async () => {
-    const buy = recommendation({ symbol: 'ACME, "Ltd"' });
+    const buy = recommendation({
+      symbol: 'ACME, "Ltd"',
+      signalLow: 96,
+      signalClose: 101,
+      signalOpen: 99,
+      signalHigh: 103,
+      signalLowTick: 1920,
+      currentLdcTick: 1920,
+      previousLdcTick: 1880,
+      windowStartTime: -10,
+      windowEndTime: 1,
+      previousWindowStartTime: -11,
+      previousWindowEndTime: 0,
+      providerAsOf: 3,
+      rolloverTicks: 40,
+      touchDistanceTicks: 0,
+      periodCandidateCount: 2,
+      anchorIndex: 0,
+      anchorBarsAgo: 14,
+    });
     const { response, rows } = await exportedRows([
       { symbol: buy.symbol, status: "BUY", recommendation: buy },
     ]);
@@ -425,6 +453,21 @@ describe("scan CSV export", () => {
         previousLdc: "94",
         strategyVersion: "rules-v1",
         dataAsOf: "3",
+        signalLow: "96",
+        signalClose: "101",
+        currentLdcTick: "1920",
+        previousLdcTick: "1880",
+        signalCandleTime: "1",
+        windowStartTime: "'-10",
+        windowEndTime: "1",
+        previousWindowStartTime: "'-11",
+        previousWindowEndTime: "0",
+        providerAsOf: "3",
+        rolloverTicks: "40",
+        touchDistanceTicks: "0",
+        periodCandidateCount: "2",
+        anchorIndex: "0",
+        anchorBarsAgo: "14",
       }),
     ]);
   });

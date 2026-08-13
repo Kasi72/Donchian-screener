@@ -42,6 +42,24 @@ export interface BuyRecommendation {
   target2: number;
   currentLdc: number;
   previousLdc: number;
+  signalLow?: number;
+  signalClose?: number;
+  signalOpen?: number;
+  signalHigh?: number;
+  signalLowTick?: number;
+  currentLdcTick?: number;
+  previousLdcTick?: number;
+  signalCandleTime?: number;
+  windowStartTime?: number;
+  windowEndTime?: number;
+  previousWindowStartTime?: number;
+  previousWindowEndTime?: number;
+  providerAsOf?: number;
+  rolloverTicks?: number;
+  touchDistanceTicks?: number;
+  periodCandidateCount?: number;
+  anchorIndex?: number;
+  anchorBarsAgo?: number;
   anchorTime: number;
   strategyVersion: typeof STRATEGY_VERSION;
   dataAsOf: number;
@@ -237,6 +255,30 @@ export async function scanSymbol(
       target2: levels.target2,
       currentLdc: selected.currentLdc,
       previousLdc: selected.previousLdc,
+      signalLow: signal.low,
+      signalClose: signal.close,
+      signalOpen: signal.open,
+      signalHigh: signal.high,
+      signalLowTick: Math.round(signal.low / tickResolution.tickSize),
+      currentLdcTick: Math.round(selected.currentLdc / tickResolution.tickSize),
+      previousLdcTick: Math.round(selected.previousLdc / tickResolution.tickSize),
+      signalCandleTime: signal.time,
+      windowStartTime: candleResponse.candles[signalIndex - selected.period + 1].time,
+      windowEndTime: signal.time,
+      previousWindowStartTime: candleResponse.candles[signalIndex - selected.period].time,
+      previousWindowEndTime: candleResponse.candles[signalIndex - 1].time,
+      providerAsOf: candleResponse.asOf,
+      rolloverTicks:
+        Math.round(selected.currentLdc / tickResolution.tickSize) -
+        Math.round(selected.previousLdc / tickResolution.tickSize),
+      touchDistanceTicks:
+        Math.abs(
+          Math.round(signal.low / tickResolution.tickSize) -
+            Math.round(selected.currentLdc / tickResolution.tickSize),
+        ),
+      periodCandidateCount: selection.candidates.length,
+      anchorIndex: selected.anchor.index,
+      anchorBarsAgo: signalIndex - selected.anchor.index,
       anchorTime: selected.anchor.time,
       strategyVersion: STRATEGY_VERSION,
       dataAsOf: candleResponse.asOf,
