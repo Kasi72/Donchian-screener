@@ -28,9 +28,26 @@ describe("calculateSequentialEvidence", () => {
     expect(evidence.reversalScore).toBeGreaterThan(0.5);
     expect(evidence.calibration).toBe("UNCALIBRATED");
     expect(evidence.calibratedProbability).toBeNull();
+    expect(evidence.sgSlope).toBeGreaterThan(0);
+    expect(evidence.sgCurvature).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(evidence.volatilityZ)).toBe(true);
+    expect(evidence.overlayScore).toBeGreaterThan(0.5);
 
     candles.push({ time: 99, open: 1, high: 2, low: 0.5, close: 1.9, volume: 99_000 });
     expect(calculateSequentialEvidence(candles, candles.length - 2)).toEqual(evidence);
+  });
+
+  it("uses endpoint-only smoothing so future candles cannot change the overlay", () => {
+    const candles = series([
+      ...Array.from({ length: 30 }, () => -0.004),
+      ...Array.from({ length: 8 }, () => 0.012),
+    ]);
+    const before = calculateSequentialEvidence(candles, candles.length - 1);
+    candles.push({ time: 99, open: 1, high: 2, low: 0.5, close: 1.9, volume: 99_000 });
+    const after = calculateSequentialEvidence(candles, candles.length - 2);
+    expect(after.sgSlope).toBe(before.sgSlope);
+    expect(after.sgCurvature).toBe(before.sgCurvature);
+    expect(after.volatilityZ).toBe(before.volatilityZ);
   });
 
   it("does not manufacture bullish evidence from a continuing decline", () => {

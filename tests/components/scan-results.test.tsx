@@ -143,6 +143,10 @@ describe("ScanResults", () => {
               calibratedProbability: null,
               state: "EARLIEST_CANDIDATE",
               sampleSize: 30,
+              sgSlope: 0.002,
+              sgCurvature: 0.0004,
+              volatilityZ: 1.2,
+              overlayScore: 0.78,
             },
             confirmation: {
               version: "confirmation-v1",
@@ -167,6 +171,7 @@ describe("ScanResults", () => {
     await user.click(screen.getByRole("button", { name: "Show calculation details for RELIANCE" }));
     expect(screen.getByText("EARLIEST_CANDIDATE", { selector: "dd" })).toHaveClass("signal-state--candidate");
     expect(screen.getByText("CONFIRMED (66.05/100)", { selector: "dd" })).toHaveClass("confirmation-grade--confirmed");
+    expect(screen.getByText("0.78/1.00", { selector: "dd" })).toBeInTheDocument();
 
     cleanup();
     render(

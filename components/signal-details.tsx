@@ -97,6 +97,18 @@ export function SignalDetails({
             "Bayesian change-point evidence",
             `${(recommendation.sequentialEvidence.changePointProbability * 100).toFixed(1)}%`,
           ],
+          ...(recommendation.sequentialEvidence.sgSlope === undefined
+            ? []
+            : [["Causal SG slope", recommendation.sequentialEvidence.sgSlope.toFixed(6)]]),
+          ...(recommendation.sequentialEvidence.sgCurvature === undefined
+            ? []
+            : [["Causal SG curvature", recommendation.sequentialEvidence.sgCurvature.toFixed(6)]]),
+          ...(recommendation.sequentialEvidence.volatilityZ === undefined
+            ? []
+            : [["Robust volatility z-score", recommendation.sequentialEvidence.volatilityZ.toFixed(2)]]),
+          ...(recommendation.sequentialEvidence.overlayScore === undefined
+            ? []
+            : [["Overlay evidence score", `${recommendation.sequentialEvidence.overlayScore.toFixed(2)}/1.00`]]),
           ["Causal evidence model", recommendation.sequentialEvidence.version],
         ]
       : []),

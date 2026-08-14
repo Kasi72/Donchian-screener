@@ -17,6 +17,14 @@ export interface SequentialEvidence {
   calibratedProbability: number | null;
   state: ReversalState;
   sampleSize: number;
+  /** Causal endpoint Savitzky–Golay slope of log-close. */
+  sgSlope?: number;
+  /** Causal endpoint Savitzky–Golay curvature of log-close. */
+  sgCurvature?: number;
+  /** Robust MAD-normalized latest return. */
+  volatilityZ?: number;
+  /** Non-gating overlay score combining the additional evidence. */
+  overlayScore?: number;
 }
 
 const EPSILON = 1e-9;
@@ -24,6 +32,7 @@ const LOOKBACK = 30;
 const MIN_HISTORY = 12;
 const CUSUM_REFERENCE = 0.25;
 const CUSUM_DECISION = 4;
+const SG_WINDOW = 7;
 
 function clamp(value: number, minimum = 0, maximum = 1): number {
   return Math.max(minimum, Math.min(maximum, value));
@@ -95,6 +104,58 @@ function trendProbability(values: number[]): number {
   return sigmoid((slope / scale) * 6);
 }
 
+function solve3(matrix: number[][], vector: number[]): number[] {
+  const a = matrix.map((row, index) => [...row, vector[index]]);
+  for (let pivot = 0; pivot < 3; pivot += 1) {
+    let best = pivot;
+    for (let row = pivot + 1; row < 3; row += 1) {
+      if (Math.abs(a[row][pivot]) > Math.abs(a[best][pivot])) best = row;
+    }
+    [a[pivot], a[best]] = [a[best], a[pivot]];
+    const divisor = a[pivot][pivot] || EPSILON;
+    for (let column = pivot; column <= 3; column += 1) a[pivot][column] /= divisor;
+    for (let row = 0; row < 3; row += 1) {
+      if (row === pivot) continue;
+      const factor = a[row][pivot];
+      for (let column = pivot; column <= 3; column += 1) a[row][column] -= factor * a[pivot][column];
+    }
+  }
+  return [a[0][3], a[1][3], a[2][3]];
+}
+
+function causalSavitzkyGolay(candles: Candle[], signalIndex: number): { slope: number; curvature: number } {
+  const start = Math.max(0, signalIndex - SG_WINDOW + 1);
+  const observations = candles.slice(start, signalIndex + 1).map((candle, index) => ({
+    x: index - (signalIndex - start),
+    y: Math.log(Math.max(candle.close, EPSILON)),
+  }));
+  if (observations.length < 3) return { slope: 0, curvature: 0 };
+  const matrix = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  const vector = [0, 0, 0];
+  for (const { x, y } of observations) {
+    const powers = [1, x, x * x];
+    for (let row = 0; row < 3; row += 1) {
+      vector[row] += powers[row] * y;
+      for (let column = 0; column < 3; column += 1) matrix[row][column] += powers[row] * powers[column];
+    }
+  }
+  const [_, slope, quadratic] = solve3(matrix, vector);
+  const curvature = 2 * quadratic;
+  return { slope, curvature: Math.abs(curvature) < 1e-12 ? 0 : curvature };
+}
+
+function additionalOverlay(values: number[], sgSlope: number, sgCurvature: number): { volatilityZ: number; score: number } {
+  if (values.length === 0) return { volatilityZ: 0, score: 0.5 };
+  const center = median(values);
+  const scale = robustScale(values, center);
+  const volatilityZ = (values.at(-1)! - center) / scale;
+  const sgScale = robustScale(values, center);
+  const slopeEvidence = sigmoid((sgSlope / sgScale) * 8);
+  const curvatureEvidence = sigmoid((sgCurvature / sgScale) * 20);
+  const recoveryEvidence = sigmoid(volatilityZ * 1.5);
+  return { volatilityZ, score: clamp(0.45 * slopeEvidence + 0.35 * curvatureEvidence + 0.2 * recoveryEvidence) };
+}
+
 function candleQuality(candle: Candle): number {
   const range = Math.max(candle.high - candle.low, EPSILON);
   const closeLocation = clamp((candle.close - candle.low) / range);
@@ -115,6 +176,8 @@ export function calculateSequentialEvidence(
   const changeProbability = changePointProbability(values);
   const trendProbabilityValue = trendProbability(values);
   const quality = candleQuality(candles[signalIndex]);
+  const { slope: sgSlope, curvature: sgCurvature } = causalSavitzkyGolay(candles, signalIndex);
+  const overlay = additionalOverlay(values, sgSlope, sgCurvature);
   const reversalProbability = clamp(
     0.32 * cusumScore +
       0.28 * changeProbability +
@@ -136,5 +199,9 @@ export function calculateSequentialEvidence(
     calibratedProbability,
     state: decisionScore >= 0.65 ? "CONFIRMED_REVERSAL" : "EARLIEST_CANDIDATE",
     sampleSize: values.length,
+    sgSlope,
+    sgCurvature,
+    volatilityZ: overlay.volatilityZ,
+    overlayScore: overlay.score,
   };
 }
