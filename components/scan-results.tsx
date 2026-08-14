@@ -289,7 +289,7 @@ export function ScanResults({
               </th>
               {COLUMNS.map(({ column, label, numeric }) => (
                 <th key={column} scope="col" className={`${column === "symbol" ? "instrument-column" : ""}${numeric ? " number-cell" : ""}${column === "signalState" ? " signal-state-column" : ""}${column === "confirmation" ? " confirmation-column" : ""}`} aria-sort={sortLabel(sort, column)}>
-                  <button className="sort-button" type="button" onClick={() => toggleSort(column)} aria-label={`Sort by ${label}`}>
+                  <button className={`sort-button${column === "signalState" || column === "confirmation" ? " sort-button--wrap" : ""}`} type="button" onClick={() => toggleSort(column)} aria-label={`Sort by ${label}`}>
                     {label} {sort?.column === column ? (sort.direction === "asc" ? "↑" : "↓") : null}
                   </button>
                 </th>

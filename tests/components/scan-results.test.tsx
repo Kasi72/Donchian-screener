@@ -89,6 +89,15 @@ describe("ScanResults", () => {
     expect(screen.getByText("Market data provider failed for BROKEN.")).toBeInTheDocument();
   });
 
+  it("exposes sortable headers and filters for both signal diagnostics", () => {
+    render(<ScanResults results={RESULTS} />);
+
+    expect(screen.getByRole("button", { name: "Sort by Signal state" })).toHaveClass("sort-button--wrap");
+    expect(screen.getByRole("button", { name: "Sort by Reversal confirmation" })).toHaveClass("sort-button--wrap");
+    expect(screen.getByLabelText("Signal state filter")).toBeInTheDocument();
+    expect(screen.getByLabelText("Reversal confirmation filter")).toBeInTheDocument();
+  });
+
   it("opens calculation details as a labelled disclosure tied to the BUY row", async () => {
     const user = userEvent.setup();
     render(<ScanResults results={RESULTS} />);

@@ -791,8 +791,16 @@ tbody tr:last-child > * {
 
 .signal-state-column,
 .confirmation-column {
+  min-width: 132px;
   max-width: 150px;
   white-space: normal;
+}
+
+.sort-button--wrap {
+  width: 100%;
+  max-width: 150px;
+  white-space: normal;
+  line-height: 1.25;
 }
 
 .table-signal-state--earliest_candidate {
