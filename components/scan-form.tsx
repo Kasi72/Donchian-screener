@@ -498,26 +498,28 @@ export function ScanForm() {
             </select>
           </div>
 
-          <button
-            className="primary-action"
-            type="button"
-            disabled={instruments.length === 0 || isBusy}
-            onClick={() => void runCurrentScan()}
-          >
-            {phase === "scanning" ? "Scanning…" : "Scan for BUY signals"}
-          </button>
-          {phase === "scanning" ? (
+          <div className="scan-actions">
             <button
-              className="secondary-action"
+              className="primary-action"
               type="button"
-              onClick={() => {
-                cancelActiveRequest();
-                setPhase("ready");
-              }}
+              disabled={instruments.length === 0 || isBusy}
+              onClick={() => void runCurrentScan()}
             >
-              Cancel scan
+              {phase === "scanning" ? "Scanning…" : "Scan for BUY signals"}
             </button>
-          ) : null}
+            {phase === "scanning" ? (
+              <button
+                className="secondary-action"
+                type="button"
+                onClick={() => {
+                  cancelActiveRequest();
+                  setPhase("ready");
+                }}
+              >
+                Cancel scan
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="summary-area" aria-live="polite">

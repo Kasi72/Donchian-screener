@@ -188,7 +188,7 @@ input[type="file"] {
   display: grid;
   grid-template-columns: minmax(300px, 1.4fr) minmax(180px, 0.65fr) auto;
   gap: 20px;
-  align-items: end;
+  align-items: start;
 }
 
 .field {
@@ -212,7 +212,9 @@ input[type="file"] {
 }
 
 .field input[type="file"] {
-  padding: 5px;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 4px 6px;
 }
 
 .field input[type="file"]::file-selector-button {
@@ -258,6 +260,20 @@ input[type="file"] {
   border: 1px solid var(--buy);
   background: var(--buy);
   color: var(--on-buy);
+}
+
+.scan-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 27px;
+}
+
+.scan-actions .primary-action,
+.scan-actions .secondary-action {
+  flex: 1 1 auto;
+  white-space: nowrap;
 }
 
 .primary-action:hover:not(:disabled) {
@@ -767,6 +783,17 @@ tbody tr:last-child > * {
   }
 
   .primary-action {
+    width: 100%;
+  }
+
+  .scan-actions {
+    grid-column: 1 / -1;
+    width: 100%;
+    padding-top: 0;
+  }
+
+  .scan-actions .primary-action,
+  .scan-actions .secondary-action {
     width: 100%;
   }
 
