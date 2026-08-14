@@ -224,6 +224,7 @@ export function ScanForm() {
   const [timeframe, setTimeframe] = useState<Timeframe>("1d");
   const [results, setResults] = useState<ScanItemResult[]>([]);
   const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
+  const [scanProgress, setScanProgress] = useState(0);
   const [projection, setProjection] = useState<ScanResultsProjection>({ filtered: [], selected: [] });
   const [error, setError] = useState<RequestError>();
   const errorRef = useRef<HTMLDivElement>(null);
@@ -248,6 +249,24 @@ export function ScanForm() {
       errorRef.current?.focus();
     }
   }, [error]);
+
+  useEffect(() => {
+    if (phase !== "scanning") {
+      return;
+    }
+
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      // The API returns one validated batch, so this is request progress rather
+      // than a fabricated per-symbol completion count. It eases toward 90%
+      // until the response arrives and keeps the user informed during slower scans.
+      const elapsed = Date.now() - startedAt;
+      const next = Math.min(90, 8 + 82 * (1 - Math.exp(-elapsed / 12_000)));
+      setScanProgress((current) => Math.max(current, next));
+    }, 200);
+
+    return () => window.clearInterval(timer);
+  }, [phase]);
 
   useEffect(
     () => () => {
@@ -276,6 +295,7 @@ export function ScanForm() {
     requestIdRef.current += 1;
     activeRequestRef.current?.controller.abort();
     activeRequestRef.current = undefined;
+    setScanProgress(0);
   }
 
   async function parseFile(file: File): Promise<void> {
@@ -334,6 +354,7 @@ export function ScanForm() {
     setError(undefined);
     setResults([]);
     resetProjection();
+    setScanProgress(8);
     setPhase("scanning");
 
     try {
@@ -359,6 +380,7 @@ export function ScanForm() {
         throw new Error("The server returned invalid scan results.");
       }
       setResults(parsedResults);
+      setScanProgress(100);
       setPhase("complete");
     } catch (cause) {
       if (!ownsRequest(request) || isAbortError(cause)) {
@@ -525,7 +547,26 @@ export function ScanForm() {
             </div>
           ) : null}
           {phase === "scanning" ? (
-            <p className="progress-copy">Scanning {plural(instruments.length, "instrument")}…</p>
+            <div className="scan-progress" aria-live="polite">
+              <div className="scan-progress-meta">
+                <p className="progress-copy">Scanning {plural(instruments.length, "instrument")}…</p>
+                <strong>{Math.round(scanProgress)}%</strong>
+              </div>
+              <div
+                className="scan-progress-track"
+                role="progressbar"
+                aria-label="Scan progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(scanProgress)}
+              >
+                <span
+                  className="scan-progress-fill"
+                  style={{ width: `${Math.max(4, scanProgress)}%` }}
+                />
+              </div>
+              <p className="scan-progress-detail">Fetching completed candles and validating reversal rules…</p>
+            </div>
           ) : null}
           {(phase === "complete" || phase === "exporting") && results.length > 0 ? (
             <p className="progress-copy">
@@ -542,6 +583,7 @@ export function ScanForm() {
           <label>
             Show
             <select
+              className="filter-select"
               value={resultFilter}
               onChange={(event) => {
                 setResultFilter(event.currentTarget.value as ResultFilter);

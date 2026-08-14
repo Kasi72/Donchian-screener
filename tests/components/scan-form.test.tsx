@@ -108,6 +108,7 @@ describe("ScanForm", () => {
     await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
 
     expect(screen.getByText("Scanning 2 instruments…")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Scan progress" })).toBeInTheDocument();
     expect(screen.queryByText(/Ready to scan/)).not.toBeInTheDocument();
     expect(screen.queryByText("Upload a stock list to begin.")).not.toBeInTheDocument();
   });
@@ -531,6 +532,7 @@ describe("ScanForm", () => {
     await user.click(screen.getByRole("button", { name: "Scan for BUY signals" }));
     const table = await screen.findByRole("table", { name: "Scan results" });
     const show = screen.getByLabelText("Show");
+    expect(show).toHaveClass("filter-select");
 
     await user.selectOptions(show, "BUY");
     expect(within(table).getByText("RELIANCE")).toBeInTheDocument();
