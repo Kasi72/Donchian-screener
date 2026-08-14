@@ -109,6 +109,15 @@ export function SignalDetails({
           ...(recommendation.sequentialEvidence.overlayScore === undefined
             ? []
             : [["Overlay evidence score", `${recommendation.sequentialEvidence.overlayScore.toFixed(2)}/1.00`]]),
+          ...(recommendation.sequentialEvidence.trendState === undefined
+            ? []
+            : [["Trend state", recommendation.sequentialEvidence.trendState]]),
+          ...(recommendation.sequentialEvidence.trendPersistenceScore === undefined
+            ? []
+            : [["Trend persistence", `${(recommendation.sequentialEvidence.trendPersistenceScore * 100).toFixed(1)}%`]]),
+          ...(recommendation.sequentialEvidence.traderSummary === undefined
+            ? []
+            : [["Trader read", recommendation.sequentialEvidence.traderSummary]]),
           ["Causal evidence model", recommendation.sequentialEvidence.version],
         ]
       : []),

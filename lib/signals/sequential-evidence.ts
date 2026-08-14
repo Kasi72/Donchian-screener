@@ -4,6 +4,7 @@ import { applyPlattCalibration, type PlattCalibrationModel } from "./calibration
 export const SEQUENTIAL_EVIDENCE_VERSION = "sequential-v1" as const;
 
 export type ReversalState = "EARLIEST_CANDIDATE" | "CONFIRMED_REVERSAL";
+export type TrendState = "REVERSAL_CANDIDATE" | "DEVELOPING_FLIP" | "CONFIRMED_FLIP";
 
 export interface SequentialEvidence {
   version: typeof SEQUENTIAL_EVIDENCE_VERSION;
@@ -25,6 +26,10 @@ export interface SequentialEvidence {
   volatilityZ?: number;
   /** Non-gating overlay score combining the additional evidence. */
   overlayScore?: number;
+  /** Persistence evidence is informational and never changes the Donchian gate. */
+  trendPersistenceScore?: number;
+  trendState?: TrendState;
+  traderSummary?: string;
 }
 
 const EPSILON = 1e-9;
@@ -156,6 +161,31 @@ function additionalOverlay(values: number[], sgSlope: number, sgCurvature: numbe
   return { volatilityZ, score: clamp(0.45 * slopeEvidence + 0.35 * curvatureEvidence + 0.2 * recoveryEvidence) };
 }
 
+function trendPersistence(values: number[], trendProbabilityValue: number): { score: number; state: TrendState; summary: string } {
+  const recent = values.slice(-3);
+  const positiveRate = recent.length === 0 ? 0 : recent.filter((value) => value > 0).length / recent.length;
+  const score = clamp(0.6 * trendProbabilityValue + 0.4 * positiveRate);
+  if (score >= 0.7 && positiveRate >= 2 / 3) {
+    return {
+      score,
+      state: "CONFIRMED_FLIP",
+      summary: "Donchian reversal is confirmed and recent candles support an upward trend flip.",
+    };
+  }
+  if (score >= 0.5) {
+    return {
+      score,
+      state: "DEVELOPING_FLIP",
+      summary: "Donchian reversal is valid; the trend flip is developing—wait for follow-through.",
+    };
+  }
+  return {
+    score,
+    state: "REVERSAL_CANDIDATE",
+    summary: "Donchian reversal is valid, but trend follow-through is not confirmed.",
+  };
+}
+
 function candleQuality(candle: Candle): number {
   const range = Math.max(candle.high - candle.low, EPSILON);
   const closeLocation = clamp((candle.close - candle.low) / range);
@@ -178,6 +208,7 @@ export function calculateSequentialEvidence(
   const quality = candleQuality(candles[signalIndex]);
   const { slope: sgSlope, curvature: sgCurvature } = causalSavitzkyGolay(candles, signalIndex);
   const overlay = additionalOverlay(values, sgSlope, sgCurvature);
+  const persistence = trendPersistence(values, trendProbabilityValue);
   const reversalProbability = clamp(
     0.32 * cusumScore +
       0.28 * changeProbability +
@@ -203,5 +234,8 @@ export function calculateSequentialEvidence(
     sgCurvature,
     volatilityZ: overlay.volatilityZ,
     overlayScore: overlay.score,
+    trendPersistenceScore: persistence.score,
+    trendState: persistence.state,
+    traderSummary: persistence.summary,
   };
 }

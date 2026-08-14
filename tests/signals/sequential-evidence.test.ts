@@ -32,6 +32,9 @@ describe("calculateSequentialEvidence", () => {
     expect(evidence.sgCurvature).toBeGreaterThanOrEqual(0);
     expect(Number.isFinite(evidence.volatilityZ)).toBe(true);
     expect(evidence.overlayScore).toBeGreaterThan(0.5);
+    expect(evidence.trendPersistenceScore).toBeGreaterThan(0.5);
+    expect(evidence.trendState).toMatch(/DEVELOPING_FLIP|CONFIRMED_FLIP/);
+    expect(evidence.traderSummary).toContain("Donchian");
 
     candles.push({ time: 99, open: 1, high: 2, low: 0.5, close: 1.9, volume: 99_000 });
     expect(calculateSequentialEvidence(candles, candles.length - 2)).toEqual(evidence);

@@ -147,6 +147,9 @@ describe("ScanResults", () => {
               sgCurvature: 0.0004,
               volatilityZ: 1.2,
               overlayScore: 0.78,
+              trendPersistenceScore: 0.71,
+              trendState: "CONFIRMED_FLIP",
+              traderSummary: "Donchian reversal is confirmed and recent candles support an upward trend flip.",
             },
             confirmation: {
               version: "confirmation-v1",
@@ -172,6 +175,7 @@ describe("ScanResults", () => {
     expect(screen.getByText("EARLIEST_CANDIDATE", { selector: "dd" })).toHaveClass("signal-state--candidate");
     expect(screen.getByText("CONFIRMED (66.05/100)", { selector: "dd" })).toHaveClass("confirmation-grade--confirmed");
     expect(screen.getByText("0.78/1.00", { selector: "dd" })).toBeInTheDocument();
+    expect(screen.getByText("Donchian reversal is confirmed and recent candles support an upward trend flip.", { selector: "dd" })).toBeInTheDocument();
 
     cleanup();
     render(
