@@ -30,6 +30,13 @@ export interface PeriodAudit {
   valid: boolean;
 }
 
+export interface PeriodStability {
+  period: number;
+  validNeighborCount: number;
+  neighborhoodSize: number;
+  stabilityScore: number;
+}
+
 export interface StructuralScoreComponents {
   prominence: number;
   recovery: number;
@@ -172,6 +179,50 @@ export function selectHighestPeriodCandidate(
   return selected;
 }
 
+/**
+ * Ranks valid periods by local stability before using the structural score.
+ * A period remains eligible when its own Donchian gate passes; neighboring
+ * periods are evidence about parameter fragility, not an additional hard gate.
+ */
+export function selectStablePeriodCandidate(
+  candidates: PeriodCandidate[],
+  stability: PeriodStability[],
+): PeriodCandidate | undefined {
+  const stabilityByPeriod = new Map(stability.map((item) => [item.period, item]));
+  let selected: PeriodCandidate | undefined;
+  for (const candidate of candidates) {
+    const currentStability = stabilityByPeriod.get(candidate.period)?.stabilityScore ?? 0;
+    if (selected === undefined) {
+      selected = candidate;
+      continue;
+    }
+    const selectedStability = stabilityByPeriod.get(selected.period)?.stabilityScore ?? 0;
+    if (currentStability > selectedStability ||
+      (currentStability === selectedStability && ranksBefore(candidate, selected))) {
+      selected = candidate;
+    }
+  }
+  return selected;
+}
+
+function periodStability(
+  candles: Candle[],
+  signalIndex: number,
+  period: number,
+  tickSize: number,
+  radius = 2,
+): PeriodStability {
+  const audits = auditPeriodNeighborhood(candles, signalIndex, period, tickSize, radius);
+  const validNeighborCount = audits.filter((audit) => audit.valid).length;
+  const neighborhoodSize = audits.length;
+  return {
+    period,
+    validNeighborCount,
+    neighborhoodSize,
+    stabilityScore: neighborhoodSize === 0 ? 0 : validNeighborCount / neighborhoodSize,
+  };
+}
+
 export function isUniquePeriodSelection(candidates: PeriodCandidate[]): boolean {
   return candidates.length === 1;
 }
@@ -265,7 +316,7 @@ export function selectRulesPeriod(
   candles: Candle[],
   signalIndex: number,
   tickSize: number,
-): { selected?: PeriodCandidate; candidates: PeriodCandidate[] } {
+): { selected?: PeriodCandidate; candidates: PeriodCandidate[]; stability: PeriodStability[] } {
   const anchors = findConfirmedPivotLows(candles, signalIndex);
   const candidates: PeriodCandidate[] = [];
 
@@ -288,7 +339,10 @@ export function selectRulesPeriod(
     });
   }
 
-  const selected = selectHighestPeriodCandidate(candidates);
+  const stability = candidates.map((candidate) =>
+    periodStability(candles, signalIndex, candidate.period, tickSize),
+  );
+  const selected = selectStablePeriodCandidate(candidates, stability);
 
-  return selected === undefined ? { candidates } : { selected, candidates };
+  return selected === undefined ? { candidates, stability } : { selected, candidates, stability };
 }

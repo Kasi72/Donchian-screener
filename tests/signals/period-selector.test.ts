@@ -5,6 +5,7 @@ import {
   isExactPeriodCandidate,
   isUniquePeriodSelection,
   selectHighestPeriodCandidate,
+  selectStablePeriodCandidate,
   selectRulesPeriod,
   structuralScore,
   type PeriodCandidate,
@@ -185,4 +186,50 @@ describe("rules period selection", () => {
         ?.anchor.index,
     ).toBe(20);
   });
+
+  it("prefers the period with the most stable valid neighborhood before structural score", () => {
+    const candidates: PeriodCandidate[] = [
+      {
+        ...candidateFixtureCandidate(40),
+        score: 0.9,
+      },
+      {
+        ...candidateFixtureCandidate(41),
+        score: 0.7,
+      },
+    ];
+
+    expect(
+      selectStablePeriodCandidate(candidates, [
+        { period: 40, validNeighborCount: 2, neighborhoodSize: 5, stabilityScore: 0.4 },
+        { period: 41, validNeighborCount: 4, neighborhoodSize: 5, stabilityScore: 0.8 },
+      ])?.period,
+    ).toBe(41);
+  });
 });
+
+function candidateFixtureCandidate(period: number): PeriodCandidate {
+  return {
+    anchor: {
+      index: 30 - period,
+      time: period,
+      low: 90,
+      prominenceAtr: 1,
+      recoveryAtr: 1,
+      confirmedAt: 32 - period,
+    },
+    period,
+    score: 0.5,
+    scoreVersion: "structural-v1",
+    scoreComponents: {
+      prominence: 0.5,
+      recovery: 0.5,
+      recency: 0.5,
+      retests: 0,
+      relativeVolume: 0.5,
+      higherTimeframeAgreement: 0,
+    },
+    currentLdc: 100,
+    previousLdc: 90,
+  };
+}

@@ -17,10 +17,13 @@ import {
 import {
   auditPeriodNeighborhood,
   isExactPeriodCandidate,
-  isUniquePeriodSelection,
   selectRulesPeriod,
 } from "./period-selector";
-import type { PeriodAudit, StructuralScoreComponents } from "./period-selector";
+import type {
+  PeriodAudit,
+  PeriodStability,
+  StructuralScoreComponents,
+} from "./period-selector";
 import {
   calculateReversalConfirmation,
   type ReversalConfirmation,
@@ -67,6 +70,7 @@ export interface BuyRecommendation {
   rolloverTicks?: number;
   touchDistanceTicks?: number;
   periodCandidateCount?: number;
+  periodStability?: PeriodStability[];
   periodAudit?: PeriodAudit[];
   windowAudit?: DailyCandleWindowAudit;
   anchorIndex?: number;
@@ -229,14 +233,6 @@ export async function scanSymbol(
     if (selection.selected === undefined) {
       return { symbol: instrument.symbol, status: "NO_SIGNAL" };
     }
-    if (!isUniquePeriodSelection(selection.candidates)) {
-      return {
-        symbol: instrument.symbol,
-        status: "NO_SIGNAL",
-        message: `Ambiguous Donchian period: ${selection.candidates.length} valid periods found.`,
-      };
-    }
-
     const selected = selection.selected;
     if (
       !isExactPeriodCandidate(
@@ -320,6 +316,7 @@ export async function scanSymbol(
             Math.round(selected.currentLdc / tickResolution.tickSize),
         ),
       periodCandidateCount: selection.candidates.length,
+      periodStability: selection.stability,
       periodAudit: auditPeriodNeighborhood(
         candleResponse.candles,
         signalIndex,

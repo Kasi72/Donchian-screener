@@ -47,6 +47,16 @@ export function SignalDetails({
     ["Candle timeframe", recommendation.timeframe],
     ["Price adjustment", recommendation.adjustmentMode],
     ["Tick size / policy", `${recommendation.tickSize} / ${recommendation.tickPolicy}`],
+    ...(recommendation.periodStability
+      ? [[
+          "Period robustness",
+          recommendation.periodStability
+            .map(({ period, validNeighborCount, neighborhoodSize }) =>
+              `${period}:${validNeighborCount}/${neighborhoodSize}`,
+            )
+            .join(" | "),
+        ]]
+      : []),
     ...(recommendation.periodAudit
       ? [[
           "Period audit (N±2)",
