@@ -113,6 +113,96 @@ describe("ScanResults", () => {
     expect(details).toHaveTextContent("Anchor rationaleConfirmed structural pivot selected causally.");
   });
 
+  it("colors candidate and confirmed signal states distinctly", async () => {
+    const user = userEvent.setup();
+    const recommendation = RESULTS[0].recommendation!;
+    render(
+      <ScanResults
+        results={[{
+          ...RESULTS[0],
+          recommendation: {
+            ...recommendation,
+            signalState: "EARLIEST_CANDIDATE",
+            sequentialEvidence: {
+              version: "sequential-v1",
+              cusumScore: 0.4,
+              changePointProbability: 0.4,
+              trendProbability: 0.4,
+              candleQuality: 0.4,
+              reversalScore: 0.4,
+              calibration: "UNCALIBRATED",
+              calibratedProbability: null,
+              state: "EARLIEST_CANDIDATE",
+              sampleSize: 30,
+            },
+            confirmation: {
+              version: "confirmation-v1",
+              score: 66.05,
+              grade: "CONFIRMED",
+              closeLocation: 0.7,
+              lowerWickRatio: 0.6,
+              atrRecovery: 1,
+              volumeZScore: null,
+              changePointScore: 0.7,
+              validPeriodCount: 2,
+              validPeriodRange: [40, 41],
+              higherTimeframe: "UNAVAILABLE",
+              relativeStrength: "UNAVAILABLE",
+              reasons: [],
+            },
+          },
+        }]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Show calculation details for RELIANCE" }));
+    expect(screen.getByText("EARLIEST_CANDIDATE")).toHaveClass("signal-state--candidate");
+    expect(screen.getByText("CONFIRMED (66.05/100)")).toHaveClass("confirmation-grade--confirmed");
+
+    cleanup();
+    render(
+      <ScanResults
+        results={[{
+          ...RESULTS[0],
+          recommendation: {
+            ...recommendation,
+            signalState: "CONFIRMED_REVERSAL",
+            sequentialEvidence: {
+              version: "sequential-v1",
+              cusumScore: 0.9,
+              changePointProbability: 0.9,
+              trendProbability: 0.9,
+              candleQuality: 0.9,
+              reversalScore: 0.9,
+              calibration: "UNCALIBRATED",
+              calibratedProbability: null,
+              state: "CONFIRMED_REVERSAL",
+              sampleSize: 30,
+            },
+            confirmation: {
+              version: "confirmation-v1",
+              score: 88,
+              grade: "STRONG",
+              closeLocation: 0.9,
+              lowerWickRatio: 0.9,
+              atrRecovery: 2,
+              volumeZScore: 2,
+              changePointScore: 0.9,
+              validPeriodCount: 4,
+              validPeriodRange: [39, 42],
+              higherTimeframe: "UNAVAILABLE",
+              relativeStrength: "UNAVAILABLE",
+              reasons: [],
+            },
+          },
+        }]}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Show calculation details for RELIANCE" }));
+    expect(screen.getByText("CONFIRMED_REVERSAL")).toHaveClass("signal-state--confirmed");
+    expect(screen.getByText("STRONG (88.00/100)")).toHaveClass("confirmation-grade--strong");
+  });
+
   it("sorts a column in ascending then descending order", async () => {
     const user = userEvent.setup();
     render(<ScanResults results={RESULTS} />);

@@ -135,7 +135,27 @@ export function SignalDetails({
             {fields.map(([label, value]) => (
               <div key={label}>
                 <dt>{label}</dt>
-                <dd>{value}</dd>
+                <dd
+                  className={
+                    label === "Signal state"
+                      ? value === "EARLIEST_CANDIDATE"
+                        ? "signal-state--candidate"
+                        : value === "CONFIRMED_REVERSAL"
+                          ? "signal-state--confirmed"
+                          : undefined
+                      : label === "Reversal confirmation"
+                        ? value.startsWith("STRONG ")
+                          ? "confirmation-grade--strong"
+                          : value.startsWith("CONFIRMED ")
+                            ? "confirmation-grade--confirmed"
+                            : value.startsWith("CORE_ONLY ")
+                              ? "confirmation-grade--core"
+                              : undefined
+                      : undefined
+                  }
+                >
+                  {value}
+                </dd>
               </div>
             ))}
           </dl>

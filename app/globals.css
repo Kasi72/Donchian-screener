@@ -15,6 +15,11 @@
   --buy-soft: #edf8f3;
   --on-buy: #ffffff;
   --warning: #9a5b08;
+  --signal-candidate: #a66300;
+  --signal-confirmed: #087a52;
+  --confirmation-strong: #05603f;
+  --confirmation-confirmed: #087a52;
+  --confirmation-core: #a66300;
   --error: #b42318;
   --error-soft: #fff4f2;
   --focus: #0b72c9;
@@ -37,6 +42,11 @@
   --buy-soft: #173d2e;
   --on-buy: #081e15;
   --warning: #f5b45b;
+  --signal-candidate: #ffd166;
+  --signal-confirmed: #59e6a4;
+  --confirmation-strong: #72f0b5;
+  --confirmation-confirmed: #59e6a4;
+  --confirmation-core: #ffd166;
   --error: #ff887e;
   --error-soft: #42211f;
   --focus: #7dc4ff;
@@ -749,6 +759,26 @@ tbody tr:last-child > * {
   margin: 3px 0 0;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.details-region dd.signal-state--candidate {
+  color: var(--signal-candidate);
+}
+
+.details-region dd.signal-state--confirmed {
+  color: var(--signal-confirmed);
+}
+
+.details-region dd.confirmation-grade--strong {
+  color: var(--confirmation-strong);
+}
+
+.details-region dd.confirmation-grade--confirmed {
+  color: var(--confirmation-confirmed);
+}
+
+.details-region dd.confirmation-grade--core {
+  color: var(--confirmation-core);
 }
 
 .disclaimer {
