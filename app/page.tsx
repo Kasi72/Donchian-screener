@@ -1,4 +1,6 @@
 import { ScanForm } from "@/components/scan-form";
+import { BrandMark } from "@/components/brand-mark";
+import { StrategyFlow } from "@/components/strategy-flow";
 import { ThemeSelector } from "@/components/theme-selector";
 
 export default function Home() {
@@ -6,7 +8,8 @@ export default function Home() {
     <main>
       <header className="site-header">
         <a className="brand" href="#main-content" aria-label="Donchian Reversal Screener home">
-          Donchian Reversal Screener
+          <BrandMark />
+          <span>Donchian Reversal Screener</span>
         </a>
         <ThemeSelector />
       </header>
@@ -19,6 +22,7 @@ export default function Home() {
             from completed Yahoo Finance candles.
           </p>
         </div>
+        <StrategyFlow />
         <ScanForm />
       </div>
     </main>
