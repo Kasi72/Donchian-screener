@@ -294,7 +294,7 @@ export function ScanResults({
                   </button>
                 </th>
               ))}
-              <th scope="col" aria-label="Calculation details" />
+              <th scope="col" className="details-column" aria-label="Calculation details" />
             </tr>
           </thead>
           <tbody>
@@ -331,7 +331,7 @@ export function ScanResults({
                     <td className="number-cell">{formatPrice(recommendation?.target1)}</td>
                     <td className="number-cell">{formatPrice(recommendation?.target2)}</td>
                     <td className="number-cell">{recommendation?.autoPeriod ?? "—"}</td>
-                    <td>
+                    <td className="details-column">
                       {recommendation ? (
                         <time dateTime={new Date(recommendation.dataAsOf).toISOString()}>{dateFormatter.format(recommendation.dataAsOf)}</time>
                       ) : "—"}

@@ -69,6 +69,10 @@ describe("ScanResults", () => {
 
     expect(targetRule).toBeDefined();
     expect(Number.parseFloat(targetRule?.style.minHeight ?? "0")).toBeGreaterThanOrEqual(44);
+    const tableRule = Array.from(stylesheet.sheet?.cssRules ?? []).find(
+      (rule): rule is CSSStyleRule => rule instanceof CSSStyleRule && rule.selectorText === "table",
+    );
+    expect(tableRule?.style.tableLayout).toBe("fixed");
   });
 
   it("keeps BUY, NO_SIGNAL, and data failures visible in one results table", () => {
