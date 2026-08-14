@@ -686,7 +686,8 @@ select:disabled {
   letter-spacing: inherit;
   text-align: inherit;
   text-transform: inherit;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.25;
 }
 
 .selection-column {
@@ -779,7 +780,8 @@ thead th {
   font-weight: 750;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.25;
 }
 
 tbody th {

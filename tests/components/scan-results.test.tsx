@@ -78,6 +78,14 @@ describe("ScanResults", () => {
     );
     expect(detailsRule?.style.position).toBe("sticky");
     expect(detailsRule?.style.right).toBe("0px");
+    const headerRule = Array.from(stylesheet.sheet?.cssRules ?? []).find(
+      (rule): rule is CSSStyleRule => rule instanceof CSSStyleRule && rule.selectorText === "thead th",
+    );
+    expect(headerRule?.style.whiteSpace).toBe("normal");
+    const sortRule = Array.from(stylesheet.sheet?.cssRules ?? []).find(
+      (rule): rule is CSSStyleRule => rule instanceof CSSStyleRule && rule.selectorText === ".sort-button",
+    );
+    expect(sortRule?.style.whiteSpace).toBe("normal");
   });
 
   it("keeps BUY, NO_SIGNAL, and data failures visible in one results table", () => {
