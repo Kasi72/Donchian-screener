@@ -331,12 +331,12 @@ export function ScanResults({
                     <td className="number-cell">{formatPrice(recommendation?.target1)}</td>
                     <td className="number-cell">{formatPrice(recommendation?.target2)}</td>
                     <td className="number-cell">{recommendation?.autoPeriod ?? "—"}</td>
-                    <td className="details-column">
+                    <td className="data-as-of-column">
                       {recommendation ? (
                         <time dateTime={new Date(recommendation.dataAsOf).toISOString()}>{dateFormatter.format(recommendation.dataAsOf)}</time>
                       ) : "—"}
                     </td>
-                    <td>
+                    <td className="details-column">
                       {recommendation ? (
                         <button
                           id={triggerId}

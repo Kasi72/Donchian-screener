@@ -73,6 +73,11 @@ describe("ScanResults", () => {
       (rule): rule is CSSStyleRule => rule instanceof CSSStyleRule && rule.selectorText === "table",
     );
     expect(tableRule?.style.tableLayout).toBe("fixed");
+    const detailsRule = Array.from(stylesheet.sheet?.cssRules ?? []).find(
+      (rule): rule is CSSStyleRule => rule instanceof CSSStyleRule && rule.selectorText === ".details-column",
+    );
+    expect(detailsRule?.style.position).toBe("sticky");
+    expect(detailsRule?.style.right).toBe("0px");
   });
 
   it("keeps BUY, NO_SIGNAL, and data failures visible in one results table", () => {
