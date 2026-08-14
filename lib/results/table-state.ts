@@ -3,6 +3,8 @@ import type { ScanItemResult } from "@/lib/signals/scan-symbol";
 export type ResultColumn =
   | "symbol"
   | "status"
+  | "signalState"
+  | "confirmation"
   | "entry"
   | "stop"
   | "target1"
@@ -20,6 +22,8 @@ type RangeInput = number | string | Date | null | undefined;
 export interface TableFilters {
   symbol?: string;
   status?: string;
+  signalState?: string;
+  confirmation?: string;
   minEntry?: RangeInput;
   maxEntry?: RangeInput;
   minStop?: RangeInput;
@@ -73,6 +77,12 @@ function columnValue(result: ScanItemResult, column: ResultColumn): string | num
       return result.symbol;
     case "status":
       return `${result.status} ${statusText(result)}`;
+    case "signalState":
+      return recommendation?.signalState ?? recommendation?.sequentialEvidence?.state;
+    case "confirmation":
+      return recommendation?.confirmation
+        ? `${recommendation.confirmation.grade} ${recommendation.confirmation.score.toFixed(2)}`
+        : undefined;
     case "entry":
       return recommendation?.entry;
     case "stop":
@@ -134,6 +144,8 @@ export function rowId(result: ScanItemResult, originalIndex: number): string {
 export function filterResults(indexedResults: IndexedResult[], filters: TableFilters = {}): IndexedResult[] {
   const symbol = normalizeText(filters.symbol ?? "");
   const status = normalizeText(filters.status ?? "");
+  const signalState = normalizeText(filters.signalState ?? "");
+  const confirmation = normalizeText(filters.confirmation ?? "");
   const ranges = {
     entry: [numberInput(filters.minEntry), numberInput(filters.maxEntry)],
     stop: [numberInput(filters.minStop), numberInput(filters.maxStop)],
@@ -154,6 +166,12 @@ export function filterResults(indexedResults: IndexedResult[], filters: TableFil
         : !normalizeText(`${result.status} ${statusText(result)}`).includes(status)) {
         return false;
       }
+    }
+    if (signalState && !normalizeText(String(columnValue(result, "signalState") ?? "")).includes(signalState)) {
+      return false;
+    }
+    if (confirmation && !normalizeText(String(columnValue(result, "confirmation") ?? "")).includes(confirmation)) {
+      return false;
     }
     return (
       isWithinRange(columnValue(result, "entry") as number | undefined, ...ranges.entry) &&

@@ -44,6 +44,8 @@ const priceFormatter = new Intl.NumberFormat("en-IN", {
 const COLUMNS: Array<{ column: ResultColumn; label: string; numeric?: boolean }> = [
   { column: "symbol", label: "Instrument" },
   { column: "status", label: "Status" },
+  { column: "signalState", label: "Signal state" },
+  { column: "confirmation", label: "Reversal confirmation" },
   { column: "entry", label: "Entry reference", numeric: true },
   { column: "stop", label: "Stop", numeric: true },
   { column: "target1", label: "Target 1", numeric: true },
@@ -66,6 +68,15 @@ function formatPrice(value: number | undefined): string {
 
 function statusText(result: ScanItemResult): string {
   return result.message ?? STATUS_LABELS[result.status];
+}
+
+function signalStateText(result: ScanItemResult): string {
+  return result.recommendation?.signalState ?? result.recommendation?.sequentialEvidence?.state ?? "—";
+}
+
+function confirmationText(result: ScanItemResult): string {
+  const confirmation = result.recommendation?.confirmation;
+  return confirmation ? `${confirmation.grade} (${confirmation.score.toFixed(2)}/100)` : "—";
 }
 
 function sortLabel(sort: SortState | null, column: ResultColumn): "ascending" | "descending" | undefined {
@@ -193,6 +204,24 @@ export function ScanResults({
             onChange={(event) => setFilterValue("status", event.target.value)}
           />
         </div>
+        <div className="toolbar-field">
+          <label htmlFor="filter-signal-state">Signal state filter</label>
+          <input
+            id="filter-signal-state"
+            type="search"
+            value={filters.signalState ?? ""}
+            onChange={(event) => setFilterValue("signalState", event.target.value)}
+          />
+        </div>
+        <div className="toolbar-field">
+          <label htmlFor="filter-confirmation">Reversal confirmation filter</label>
+          <input
+            id="filter-confirmation"
+            type="search"
+            value={filters.confirmation ?? ""}
+            onChange={(event) => setFilterValue("confirmation", event.target.value)}
+          />
+        </div>
         {NUMERIC_FILTERS.map(({ min, max, label }) => (
           <div className="toolbar-range" key={label}>
             <label>
@@ -259,7 +288,7 @@ export function ScanResults({
                 </label>
               </th>
               {COLUMNS.map(({ column, label, numeric }) => (
-                <th key={column} scope="col" className={`${column === "symbol" ? "instrument-column" : ""}${numeric ? " number-cell" : ""}`} aria-sort={sortLabel(sort, column)}>
+                <th key={column} scope="col" className={`${column === "symbol" ? "instrument-column" : ""}${numeric ? " number-cell" : ""}${column === "signalState" ? " signal-state-column" : ""}${column === "confirmation" ? " confirmation-column" : ""}`} aria-sort={sortLabel(sort, column)}>
                   <button className="sort-button" type="button" onClick={() => toggleSort(column)} aria-label={`Sort by ${label}`}>
                     {label} {sort?.column === column ? (sort.direction === "asc" ? "↑" : "↓") : null}
                   </button>
@@ -291,6 +320,12 @@ export function ScanResults({
                     </td>
                     <th scope="row" className="instrument-column">{result.symbol}</th>
                     <td className={result.status === "BUY" ? "buy-status" : "status-copy"}>{statusText(result)}</td>
+                    <td className={`table-signal-state table-signal-state--${signalStateText(result).toLowerCase()}`}>
+                      {signalStateText(result)}
+                    </td>
+                    <td className={`table-confirmation table-confirmation--${result.recommendation?.confirmation?.grade?.toLowerCase() ?? "none"}`}>
+                      {confirmationText(result)}
+                    </td>
                     <td className="number-cell">{formatPrice(recommendation?.entry)}</td>
                     <td className="number-cell">{formatPrice(recommendation?.stop)}</td>
                     <td className="number-cell">{formatPrice(recommendation?.target1)}</td>

@@ -156,8 +156,8 @@ describe("ScanResults", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Show calculation details for RELIANCE" }));
-    expect(screen.getByText("EARLIEST_CANDIDATE")).toHaveClass("signal-state--candidate");
-    expect(screen.getByText("CONFIRMED (66.05/100)")).toHaveClass("confirmation-grade--confirmed");
+    expect(screen.getByText("EARLIEST_CANDIDATE", { selector: "dd" })).toHaveClass("signal-state--candidate");
+    expect(screen.getByText("CONFIRMED (66.05/100)", { selector: "dd" })).toHaveClass("confirmation-grade--confirmed");
 
     cleanup();
     render(
@@ -199,8 +199,8 @@ describe("ScanResults", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "Show calculation details for RELIANCE" }));
-    expect(screen.getByText("CONFIRMED_REVERSAL")).toHaveClass("signal-state--confirmed");
-    expect(screen.getByText("STRONG (88.00/100)")).toHaveClass("confirmation-grade--strong");
+    expect(screen.getByText("CONFIRMED_REVERSAL", { selector: "dd" })).toHaveClass("signal-state--confirmed");
+    expect(screen.getByText("STRONG (88.00/100)", { selector: "dd" })).toHaveClass("confirmation-grade--strong");
   });
 
   it("sorts a column in ascending then descending order", async () => {

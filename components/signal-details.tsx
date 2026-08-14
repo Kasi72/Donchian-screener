@@ -124,7 +124,7 @@ export function SignalDetails({
 
   return (
     <tr className="details-row">
-      <td colSpan={10}>
+      <td colSpan={12}>
         <section
           id={id}
           role="region"
