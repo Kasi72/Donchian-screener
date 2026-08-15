@@ -827,8 +827,102 @@ tbody tr:last-child > * {
 }
 
 .details-region {
-  padding: 18px 20px 20px;
+  padding: 20px;
   border-left: 3px solid var(--buy);
+}
+
+.details-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 2px 0 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.details-eyebrow {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.details-hero h2 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.details-hero p:not(.details-eyebrow) {
+  max-width: 680px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.details-hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 190px;
+}
+
+.details-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.details-badge--buy {
+  border-color: var(--buy);
+  color: var(--buy);
+}
+
+.details-badge.signal-state--candidate { color: var(--signal-candidate); }
+.details-badge.signal-state--confirmed { color: var(--signal-confirmed); }
+.details-badge.confirmation-grade--strong { color: var(--confirmation-strong); }
+.details-badge.confirmation-grade--confirmed { color: var(--confirmation-confirmed); }
+.details-badge.confirmation-grade--core { color: var(--confirmation-core); }
+
+.details-section {
+  padding: 18px 0 2px;
+}
+
+.details-section + .details-section {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.details-section-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.details-section-heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.details-section-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .details-region dl {
@@ -867,6 +961,25 @@ tbody tr:last-child > * {
 
 .details-region dd.confirmation-grade--core {
   color: var(--confirmation-core);
+}
+
+@media (max-width: 760px) {
+  .details-hero {
+    flex-direction: column;
+  }
+
+  .details-hero-badges {
+    justify-content: flex-start;
+    min-width: 0;
+  }
+
+  .details-section-heading {
+    display: block;
+  }
+
+  .details-section-heading p {
+    margin-top: 4px;
+  }
 }
 
 .table-signal-state,
