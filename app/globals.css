@@ -871,6 +871,54 @@ tbody tr:last-child > * {
   min-width: 190px;
 }
 
+.details-export {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  min-width: 190px;
+}
+
+.details-export label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.details-export-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.details-export select,
+.details-export-button {
+  min-height: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.details-export select {
+  max-width: 138px;
+  padding: 0 8px;
+}
+
+.details-export-button {
+  padding: 0 11px;
+  border-color: var(--buy);
+  color: var(--buy);
+  cursor: pointer;
+}
+
+.details-export-button:hover,
+.details-export-button:focus-visible {
+  background: color-mix(in srgb, var(--buy) 12%, var(--surface));
+}
+
 .details-badge {
   display: inline-flex;
   align-items: center;
@@ -970,6 +1018,11 @@ tbody tr:last-child > * {
 
   .details-hero-badges {
     justify-content: flex-start;
+    min-width: 0;
+  }
+
+  .details-export {
+    align-items: flex-start;
     min-width: 0;
   }
 

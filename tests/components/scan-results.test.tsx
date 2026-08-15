@@ -137,6 +137,9 @@ describe("ScanResults", () => {
     expect(details).toHaveTextContent("Price adjustmentBACK_ADJUSTED");
     expect(details).toHaveTextContent("Planned reward/risk2.00");
     expect(details).toHaveTextContent("Anchor rationaleConfirmed structural pivot selected causally.");
+    expect(screen.getByLabelText("Export tear sheet")).toBeInTheDocument();
+    expect(details.querySelector('option[value="pdf"]')).toHaveTextContent("PDF (print / save)");
+    expect(details.querySelector('option[value="word"]')).toHaveTextContent("Word (.doc)");
   });
 
   it("colors candidate and confirmed signal states distinctly", async () => {

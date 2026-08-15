@@ -1,6 +1,9 @@
-import { Fragment, type ReactNode } from "react";
+"use client";
+
+import { Fragment, useState, type ReactNode } from "react";
 
 import type { BuyRecommendation } from "@/lib/signals/scan-symbol";
+import { exportTraderTearSheet, type TearSheetFormat } from "@/lib/export/trader-tear-sheet";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", {
   dateStyle: "medium",
@@ -74,6 +77,7 @@ export function SignalDetails({
   id: string;
   recommendation: BuyRecommendation;
 }) {
+  const [exportFormat, setExportFormat] = useState<TearSheetFormat>("pdf");
   const confirmation = recommendation.confirmation;
   const sequential = recommendation.sequentialEvidence;
   const diagnostics = recommendation.tradeDiagnostics;
@@ -206,6 +210,22 @@ export function SignalDetails({
               <span className="details-badge details-badge--buy">BUY</span>
               <span className={`details-badge ${stateClass(signalState) ?? ""}`}>{signalState}</span>
               <span className={`details-badge ${confirmation ? gradeClass(confirmation.grade) ?? "" : ""}`}>{confirmation?.grade ?? "UNAVAILABLE"}</span>
+            </div>
+            <div className="details-export" aria-label="Export trader decision summary">
+              <label htmlFor={`${id}-export-format`}>Export tear sheet</label>
+              <div className="details-export-controls">
+                <select
+                  id={`${id}-export-format`}
+                  value={exportFormat}
+                  onChange={(event) => setExportFormat(event.target.value as TearSheetFormat)}
+                >
+                  <option value="pdf">PDF (print / save)</option>
+                  <option value="word">Word (.doc)</option>
+                </select>
+                <button type="button" className="details-export-button" onClick={() => exportTraderTearSheet(recommendation, exportFormat)}>
+                  Export
+                </button>
+              </div>
             </div>
           </header>
           <DetailSection title="Decision" description="The plain-language answer and confidence status.">
