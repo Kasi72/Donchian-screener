@@ -2,6 +2,7 @@ import type { Candle } from "@/lib/market/provider";
 import { atrAt } from "./atr";
 import { bullishRollover } from "./donchian";
 import { findConfirmedPivotLows, type PivotLow } from "./pivots";
+import { priceToTicks } from "./ticks";
 import {
   ATR_PERIOD,
   STRUCTURAL_SCORE_CONFIG,
@@ -235,10 +236,9 @@ export function auditPeriodNeighborhood(
   radius = 2,
 ): PeriodAudit[] {
   if (!Number.isInteger(selectedPeriod) || selectedPeriod <= 0) return [];
-  const toTicks = (value: number): number => Math.round(value / tickSize);
   const signalLowTick =
     signalIndex >= 0 && signalIndex < candles.length
-      ? toTicks(candles[signalIndex].low)
+      ? priceToTicks(candles[signalIndex].low, tickSize)
       : null;
   const audits: PeriodAudit[] = [];
   for (
@@ -248,8 +248,8 @@ export function auditPeriodNeighborhood(
   ) {
     try {
       const rollover = bullishRollover(candles, signalIndex, period, tickSize);
-      const currentLdcTick = toTicks(rollover.currentLdc);
-      const previousLdcTick = toTicks(rollover.previousLdc);
+      const currentLdcTick = priceToTicks(rollover.currentLdc, tickSize);
+      const previousLdcTick = priceToTicks(rollover.previousLdc, tickSize);
       const touchPassed = signalLowTick !== null && signalLowTick === currentLdcTick;
       const rolloverPassed = currentLdcTick > previousLdcTick;
       audits.push({
@@ -301,11 +301,10 @@ export function isExactPeriodCandidate(
       candidate.period,
       tickSize,
     );
-    const toTicks = (value: number): number => Math.round(value / tickSize);
     return (
       rollover.passed &&
-      toTicks(rollover.currentLdc) === toTicks(candidate.currentLdc) &&
-      toTicks(rollover.previousLdc) === toTicks(candidate.previousLdc)
+      priceToTicks(rollover.currentLdc, tickSize) === priceToTicks(candidate.currentLdc, tickSize) &&
+      priceToTicks(rollover.previousLdc, tickSize) === priceToTicks(candidate.previousLdc, tickSize)
     );
   } catch {
     return false;

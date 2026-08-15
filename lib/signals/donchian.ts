@@ -1,4 +1,5 @@
 import type { Candle } from "@/lib/market/provider";
+import { priceToTicks } from "./ticks";
 
 function assertPeriod(period: number): void {
   if (!Number.isInteger(period) || period <= 0) {
@@ -14,13 +15,6 @@ function assertEndIndex(candles: Candle[], endIndex: number): void {
   ) {
     throw new RangeError("Donchian end index is outside candle history");
   }
-}
-
-function toTickUnits(price: number, tickSize: number): number {
-  if (!Number.isFinite(tickSize) || tickSize <= 0) {
-    throw new RangeError("Tick size must be positive and finite");
-  }
-  return Math.round(price / tickSize);
 }
 
 export function lowerChannel(
@@ -56,9 +50,9 @@ export function bullishRollover(
 
   const currentLdc = lowerChannel(candles, endIndex, period);
   const previousLdc = lowerChannel(candles, endIndex - 1, period);
-  const signalLowTicks = toTickUnits(candles[endIndex].low, tickSize);
-  const currentLdcTicks = toTickUnits(currentLdc, tickSize);
-  const previousLdcTicks = toTickUnits(previousLdc, tickSize);
+  const signalLowTicks = priceToTicks(candles[endIndex].low, tickSize);
+  const currentLdcTicks = priceToTicks(currentLdc, tickSize);
+  const previousLdcTicks = priceToTicks(previousLdc, tickSize);
 
   return {
     passed: currentLdcTicks > previousLdcTicks && signalLowTicks === currentLdcTicks,

@@ -31,7 +31,9 @@ export function SignalDetails({
   recommendation: BuyRecommendation;
 }) {
   const confirmation = recommendation.confirmation;
-  const channelRollover = recommendation.currentLdc > recommendation.previousLdc;
+  const channelRollover = recommendation.currentLdcTick !== undefined && recommendation.previousLdcTick !== undefined
+    ? recommendation.currentLdcTick > recommendation.previousLdcTick
+    : recommendation.currentLdc > recommendation.previousLdc;
   const fields = [
     ["Current Donchian low", formatPrice(recommendation.currentLdc)],
     ["Previous Donchian low", formatPrice(recommendation.previousLdc)],
