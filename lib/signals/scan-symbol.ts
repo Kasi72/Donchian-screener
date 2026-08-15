@@ -33,7 +33,12 @@ import {
   type ReversalState,
   type SequentialEvidence,
 } from "./sequential-evidence";
+import {
+  calculateTradeDiagnostics,
+  type TradeDiagnostics,
+} from "./trade-diagnostics";
 import { calculateTradeLevels } from "./risk-levels";
+import { priceToTicks } from "./ticks";
 import {
   ATR_PERIOD,
   PIVOT_RIGHT_BARS,
@@ -95,6 +100,7 @@ export interface BuyRecommendation {
   /** Causal evidence state; the Donchian gate remains the hard BUY condition. */
   signalState?: ReversalState;
   sequentialEvidence?: SequentialEvidence;
+  tradeDiagnostics?: TradeDiagnostics;
   companyName?: string;
   industry?: string;
 }
@@ -279,6 +285,12 @@ export async function scanSymbol(
       candleResponse.candles,
       signalIndex,
     );
+    const tradeDiagnostics = calculateTradeDiagnostics({
+      confirmation,
+      sequential: sequentialEvidence,
+      rewardRisk: levels.rewardRisk,
+      ...(windowAudit ? { windowAudit } : {}),
+    });
 
     const recommendation: BuyRecommendation = {
       recommendation: "BUY",
@@ -298,9 +310,9 @@ export async function scanSymbol(
       signalClose: signal.close,
       signalOpen: signal.open,
       signalHigh: signal.high,
-      signalLowTick: Math.round(signal.low / tickResolution.tickSize),
-      currentLdcTick: Math.round(selected.currentLdc / tickResolution.tickSize),
-      previousLdcTick: Math.round(selected.previousLdc / tickResolution.tickSize),
+      signalLowTick: priceToTicks(signal.low, tickResolution.tickSize),
+      currentLdcTick: priceToTicks(selected.currentLdc, tickResolution.tickSize),
+      previousLdcTick: priceToTicks(selected.previousLdc, tickResolution.tickSize),
       signalCandleTime: signal.time,
       windowStartTime: candleResponse.candles[signalIndex - selected.period + 1].time,
       windowEndTime: signal.time,
@@ -308,12 +320,12 @@ export async function scanSymbol(
       previousWindowEndTime: candleResponse.candles[signalIndex - 1].time,
       providerAsOf: candleResponse.asOf,
       rolloverTicks:
-        Math.round(selected.currentLdc / tickResolution.tickSize) -
-        Math.round(selected.previousLdc / tickResolution.tickSize),
+        priceToTicks(selected.currentLdc, tickResolution.tickSize) -
+        priceToTicks(selected.previousLdc, tickResolution.tickSize),
       touchDistanceTicks:
         Math.abs(
-          Math.round(signal.low / tickResolution.tickSize) -
-            Math.round(selected.currentLdc / tickResolution.tickSize),
+          priceToTicks(signal.low, tickResolution.tickSize) -
+            priceToTicks(selected.currentLdc, tickResolution.tickSize),
         ),
       periodCandidateCount: selection.candidates.length,
       periodStability: selection.stability,
@@ -342,6 +354,7 @@ export async function scanSymbol(
       confirmation,
       signalState: sequentialEvidence.state,
       sequentialEvidence,
+      tradeDiagnostics,
       ...(resolvedInstrument.companyName
         ? { companyName: resolvedInstrument.companyName }
         : {}),

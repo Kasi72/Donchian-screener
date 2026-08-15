@@ -76,6 +76,7 @@ export function SignalDetails({
 }) {
   const confirmation = recommendation.confirmation;
   const sequential = recommendation.sequentialEvidence;
+  const diagnostics = recommendation.tradeDiagnostics;
   const signalState = recommendation.signalState ?? sequential?.state ?? "EARLIEST_CANDIDATE";
   const channelRollover = recommendation.currentLdcTick !== undefined && recommendation.previousLdcTick !== undefined
     ? recommendation.currentLdcTick > recommendation.previousLdcTick
@@ -83,9 +84,9 @@ export function SignalDetails({
   const gateText = channelRollover
     ? "PASS — signal low touches the current LDC and the LDC has risen"
     : "FAIL — the channel is flat/falling; a touch alone is not a BUY";
-  const calibratedText = sequential?.calibratedProbability === null || sequential === undefined
+  const calibratedText = diagnostics?.reversalProbability === null || diagnostics === undefined
     ? "Not calibrated — evidence score only"
-    : `${(sequential.calibratedProbability * 100).toFixed(1)}% (walk-forward model)`;
+    : `${(diagnostics.reversalProbability * 100).toFixed(1)}% (walk-forward model)`;
 
   const decisionFields: DetailField[] = [
     ["Signal state", signalState, stateClass(signalState)],
@@ -98,6 +99,28 @@ export function SignalDetails({
       "Reversal probability",
       calibratedText,
     ],
+    [
+      "95% confidence interval",
+      diagnostics?.reversalConfidenceInterval
+        ? `${(diagnostics.reversalConfidenceInterval[0] * 100).toFixed(1)}%–${(diagnostics.reversalConfidenceInterval[1] * 100).toFixed(1)}%`
+        : "Unavailable until calibrated",
+    ],
+    [
+      "Target 1 before stop",
+      diagnostics?.target1BeforeStopProbability === null || diagnostics === undefined
+        ? "Unavailable until outcome calibration"
+        : `${(diagnostics.target1BeforeStopProbability * 100).toFixed(1)}%`,
+    ],
+    [
+      "Evidence quality score",
+      diagnostics ? `${diagnostics.evidenceQualityScore.toFixed(1)}/100` : "Unavailable",
+    ],
+    [
+      "Trade quality score",
+      diagnostics?.tradeQualityScore === null || diagnostics === undefined
+        ? "Unavailable until outcome calibration"
+        : `${diagnostics.tradeQualityScore.toFixed(1)}/100`,
+    ],
     ...(sequential ? [["Trader read", sequential.traderSummary ?? "Evidence is informational; follow-through is not confirmed."]] as DetailField[] : []),
   ];
 
@@ -108,6 +131,7 @@ export function SignalDetails({
     ["Target 2", formatPrice(recommendation.target2)],
     ["Planned reward/risk", recommendation.rewardRisk.toFixed(2)],
     ["Reaction high", formatPrice(recommendation.reactionHigh)],
+    ["Maximum holding period", diagnostics ? `${diagnostics.maximumHoldingCandles} candles` : "Unavailable"],
   ];
 
   const donchianFields: DetailField[] = [
@@ -161,6 +185,11 @@ export function SignalDetails({
     ["Anchor rationale", recommendation.anchorRationale],
     ["Strategy version", sequential ? `${recommendation.strategyVersion} / evidence ${sequential.version}` : recommendation.strategyVersion],
     ["Higher timeframe", "Neutral — input unavailable"],
+    ["Market regime", diagnostics?.marketRegime ?? "Unavailable"],
+    ["Data quality", diagnostics?.dataQuality ?? "Unavailable"],
+    ["Calibration", diagnostics?.calibration ?? "Unavailable"],
+    ["Comparable historical signals", diagnostics?.comparableSignals === null || diagnostics === undefined ? "Unavailable — calibration dataset not loaded" : String(diagnostics.comparableSignals)],
+    ["Median MAE / MFE", diagnostics?.medianMae === null || diagnostics?.medianMfe === null || diagnostics === undefined ? "Unavailable — requires historical outcomes" : `${formatPrice(diagnostics.medianMae)} / ${formatPrice(diagnostics.medianMfe)}`],
   ];
 
   return (

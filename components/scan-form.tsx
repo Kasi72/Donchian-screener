@@ -100,6 +100,43 @@ function isReversalConfirmation(value: unknown): boolean {
   );
 }
 
+function isProbability(value: unknown): boolean {
+  return value === null || (isFiniteNumber(value) && value >= 0 && value <= 1);
+}
+
+function isBoundedProbability(value: unknown): boolean {
+  return isFiniteNumber(value) && value >= 0 && value <= 1;
+}
+
+function isTradeDiagnostics(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const interval = value.reversalConfidenceInterval;
+  const validInterval = interval === null || (
+    Array.isArray(interval) && interval.length === 2 &&
+    isBoundedProbability(interval[0]) && isBoundedProbability(interval[1]) &&
+    (interval[0] as number) <= (interval[1] as number)
+  );
+  return (
+    value.version === "trade-diagnostics-v1" &&
+    isProbability(value.reversalProbability) &&
+    validInterval &&
+    isProbability(value.target1BeforeStopProbability) &&
+    isProbability(value.target2BeforeStopProbability) &&
+    (value.comparableSignals === null || isNonNegativeInteger(value.comparableSignals)) &&
+    (value.target1Wins === null || isNonNegativeInteger(value.target1Wins)) &&
+    (value.stopFirstOutcomes === null || isNonNegativeInteger(value.stopFirstOutcomes)) &&
+    (value.medianBarsToTarget1 === null || isNonNegativeInteger(value.medianBarsToTarget1)) &&
+    (value.medianMae === null || isFiniteNumber(value.medianMae)) &&
+    (value.medianMfe === null || isFiniteNumber(value.medianMfe)) &&
+    isNonNegativeInteger(value.maximumHoldingCandles) &&
+    ["BULLISH", "NEUTRAL_TO_BULLISH", "NEUTRAL", "UNAVAILABLE"].includes(value.marketRegime as string) &&
+    ["VERIFIED", "LIMITED"].includes(value.dataQuality as string) &&
+    ["UNAVAILABLE", "WALK_FORWARD_VALIDATED"].includes(value.calibration as string) &&
+    isFiniteNumber(value.evidenceQualityScore) && value.evidenceQualityScore >= 0 && value.evidenceQualityScore <= 100 &&
+    (value.tradeQualityScore === null || (isFiniteNumber(value.tradeQualityScore) && value.tradeQualityScore >= 0 && value.tradeQualityScore <= 100))
+  );
+}
+
 function isUniverseInstrument(value: unknown): value is UniverseInstrument {
   if (!isRecord(value)) {
     return false;
@@ -172,6 +209,7 @@ function isBuyRecommendation(value: unknown, symbol: string): boolean {
     value.higherTimeframeInput === "NEUTRAL_UNAVAILABLE" &&
     typeof value.anchorRationale === "string" &&
     (value.confirmation === undefined || isReversalConfirmation(value.confirmation)) &&
+    (value.tradeDiagnostics === undefined || isTradeDiagnostics(value.tradeDiagnostics)) &&
     isOptionalString(value.companyName) &&
     isOptionalString(value.industry)
   );
