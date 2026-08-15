@@ -56,8 +56,25 @@ function median(values: number[]): number {
     : sorted[middle];
 }
 
+function quantile(values: number[], probability: number): number {
+  const sorted = [...values].sort((left, right) => left - right);
+  if (sorted.length === 0) return 0;
+  const position = (sorted.length - 1) * probability;
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  if (lower === upper) return sorted[lower];
+  const weight = position - lower;
+  return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+}
+
 function robustScale(values: number[], center: number): number {
-  return Math.max(1.4826 * median(values.map((value) => Math.abs(value - center))), EPSILON);
+  const mad = median(values.map((value) => Math.abs(value - center)));
+  if (mad > EPSILON) return 1.4826 * mad;
+  // MAD is legitimately zero for a quantized/two-regime sample even when
+  // the observations are not constant. Use IQR only as a fallback; a truly
+  // constant series still returns zero and is handled neutrally by callers.
+  const iqr = quantile(values, 0.75) - quantile(values, 0.25);
+  return iqr > EPSILON ? iqr / 1.349 : 0;
 }
 
 function returnsThrough(candles: Candle[], signalIndex: number): number[] {
@@ -75,6 +92,7 @@ function bullishCusum(values: number[]): number {
   if (values.length < MIN_HISTORY) return 0.5;
   const center = median(values);
   const scale = robustScale(values, center);
+  if (scale === 0) return 0.5;
   let cumulative = 0;
   for (const value of values) {
     cumulative = Math.max(0, cumulative + (value - center) / scale - CUSUM_REFERENCE);
@@ -88,11 +106,15 @@ function changePointProbability(values: number[]): number {
   const baseline = values.slice(0, split);
   const recent = values.slice(split);
   const baselineCenter = median(baseline);
-  const scale = robustScale(baseline, baselineCenter);
+  // If the baseline is flat, estimate dispersion from the complete causal
+  // sample so a genuine step-change is not discarded as "zero volatility".
+  const scale = robustScale(baseline, baselineCenter) || robustScale(values, baselineCenter);
+  if (scale === 0) return 0.5;
   const recentCenter = median(recent);
   const standardError = scale / Math.sqrt(recent.length);
-  // Robust Gaussian log-odds for a positive recent-vs-baseline drift. The
-  // logistic transform is calibrated later using walk-forward data.
+  // Robust Gaussian-style regime-shift evidence for a positive
+  // recent-vs-baseline drift. This is deliberately not labelled as a true
+  // Bayesian posterior: calibration requires walk-forward outcomes.
   return sigmoid((recentCenter - baselineCenter) / Math.max(standardError, EPSILON) - 1.2);
 }
 
@@ -106,6 +128,7 @@ function trendProbability(values: number[]): number {
   }
   const slope = level / Math.max(weight, EPSILON);
   const scale = robustScale(values, median(values));
+  if (scale === 0) return 0.5;
   return sigmoid((slope / scale) * 6);
 }
 
@@ -153,6 +176,7 @@ function additionalOverlay(values: number[], sgSlope: number, sgCurvature: numbe
   if (values.length === 0) return { volatilityZ: 0, score: 0.5 };
   const center = median(values);
   const scale = robustScale(values, center);
+  if (scale === 0) return { volatilityZ: 0, score: 0.5 };
   const volatilityZ = (values.at(-1)! - center) / scale;
   const sgScale = robustScale(values, center);
   const slopeEvidence = sigmoid((sgSlope / sgScale) * 8);

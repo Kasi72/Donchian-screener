@@ -64,4 +64,28 @@ describe("calculateReversalConfirmation", () => {
     expect(result.validPeriodRange[1]).toBeGreaterThanOrEqual(10);
     expect(result.reasons.length).toBeGreaterThan(0);
   });
+
+  it("uses the same N±2 stability neighborhood as the period selector", () => {
+    const history = candles();
+    const result = calculateReversalConfirmation(history, 39, 10, 90, 0.05);
+
+    expect(result.validPeriodRange[0]).toBeGreaterThanOrEqual(8);
+    expect(result.validPeriodRange[1]).toBeLessThanOrEqual(12);
+  });
+
+  it("compares channel touches on exchange ticks, not binary price decimals", () => {
+    const history = candles();
+    history[39] = {
+      time: 39,
+      open: 96,
+      high: 103,
+      low: 90.02,
+      close: 101,
+      volume: 3_000,
+    };
+
+    const result = calculateReversalConfirmation(history, 39, 10, 90.01, 0.05);
+
+    expect(result.reasons).toContain("signal low is aligned with the selected lower channel");
+  });
 });

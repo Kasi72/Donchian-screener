@@ -1,5 +1,3 @@
-const TOLERANCE_MULTIPLIER = 8;
-
 function assertFinite(value: number, name: string): void {
   if (!Number.isFinite(value)) throw new RangeError(`${name} must be finite`);
 }
@@ -16,8 +14,10 @@ export function priceToTicks(price: number, tickSize: number): number {
   assertTickSize(tickSize);
   const quotient = price / tickSize;
   const nearest = Math.round(quotient);
-  const tolerance = Number.EPSILON * Math.max(1, Math.abs(quotient)) * TOLERANCE_MULTIPLIER;
-  return Math.abs(quotient - nearest) <= tolerance ? nearest : nearest;
+  // All downstream comparisons are performed in integer ticks.  Rounding
+  // once here removes binary-fraction drift without introducing a separate
+  // price tolerance that could disagree with the exchange tick grid.
+  return nearest;
 }
 
 /** Converts integer exchange ticks back to a display-safe price. */

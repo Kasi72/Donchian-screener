@@ -53,6 +53,8 @@ export interface StructuralScore {
   components: StructuralScoreComponents;
 }
 
+export const PERIOD_STABILITY_RADIUS = 2 as const;
+
 function clampUnit(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
@@ -211,7 +213,7 @@ function periodStability(
   signalIndex: number,
   period: number,
   tickSize: number,
-  radius = 2,
+  radius = PERIOD_STABILITY_RADIUS,
 ): PeriodStability {
   const audits = auditPeriodNeighborhood(candles, signalIndex, period, tickSize, radius);
   const validNeighborCount = audits.filter((audit) => audit.valid).length;

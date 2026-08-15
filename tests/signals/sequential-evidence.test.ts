@@ -15,6 +15,23 @@ function series(returns: number[]): Candle[] {
 }
 
 describe("calculateSequentialEvidence", () => {
+  it("stays neutral on a zero-MAD return series instead of saturating", () => {
+    const history = Array.from({ length: 20 }, (_, index) => ({
+      time: index,
+      open: 100,
+      high: 101,
+      low: 99,
+      close: 100,
+      volume: 1_000,
+    }));
+
+    const result = calculateSequentialEvidence(history, 19);
+
+    expect(result.cusumScore).toBe(0.5);
+    expect(result.changePointProbability).toBe(0.5);
+    expect(result.trendProbability).toBe(0.5);
+    expect(result.overlayScore).toBe(0.5);
+  });
   it("is causal and produces strong bullish evidence after a robust regime shift", () => {
     const candles = series([
       ...Array.from({ length: 30 }, () => -0.004),

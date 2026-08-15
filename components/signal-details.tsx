@@ -96,7 +96,7 @@ export function SignalDetails({
               ]]),
           ["CUSUM evidence", `${(recommendation.sequentialEvidence.cusumScore * 100).toFixed(1)}%`],
           [
-            "Bayesian change-point evidence",
+            "Robust regime-shift evidence",
             `${(recommendation.sequentialEvidence.changePointProbability * 100).toFixed(1)}%`,
           ],
           ...(recommendation.sequentialEvidence.sgSlope === undefined

@@ -1,6 +1,8 @@
 import type { Candle } from "@/lib/market/provider";
 import { atrAt } from "./atr";
 import { bullishRollover } from "./donchian";
+import { priceToTicks } from "./ticks";
+import { PERIOD_STABILITY_RADIUS } from "./period-selector";
 
 export const REVERSAL_CONFIRMATION_VERSION = "confirmation-v1" as const;
 
@@ -25,7 +27,6 @@ export interface ReversalConfirmation {
 const EPSILON = 1e-9;
 const VOLUME_LOOKBACK = 20;
 const CHANGE_LOOKBACK = 20;
-const PERIOD_RADIUS = 3;
 
 function clamp(value: number, minimum = 0, maximum = 1): number {
   return Math.max(minimum, Math.min(maximum, value));
@@ -71,7 +72,9 @@ function changePointScore(candles: Candle[], signalIndex: number): number {
   }
   if (returns.length < 5) return 0.5;
   const center = median(returns);
-  const scale = Math.max(1.4826 * mad(returns, center), EPSILON);
+  const rawScale = 1.4826 * mad(returns, center);
+  if (rawScale <= EPSILON) return 0.5;
+  const scale = rawScale;
   const cumulative = returns.reduce((sum, value) => sum + (value - center), 0);
   return clamp(0.5 + cumulative / (scale * Math.sqrt(returns.length) * 4));
 }
@@ -83,8 +86,8 @@ function periodStability(
   tickSize: number,
 ): { count: number; range: [number, number] } {
   const valid: number[] = [];
-  const first = Math.max(1, selectedPeriod - PERIOD_RADIUS);
-  const last = Math.min(signalIndex, selectedPeriod + PERIOD_RADIUS);
+  const first = Math.max(1, selectedPeriod - PERIOD_STABILITY_RADIUS);
+  const last = Math.min(signalIndex, selectedPeriod + PERIOD_STABILITY_RADIUS);
   for (let period = first; period <= last; period += 1) {
     if (bullishRollover(candles, signalIndex, period, tickSize).passed) {
       valid.push(period);
@@ -118,14 +121,14 @@ export function calculateReversalConfirmation(
   const volumeZ = finiteOrNull(volumeZScore(candles, signalIndex) ?? Number.NaN);
   const cpScore = changePointScore(candles, signalIndex);
   const stability = periodStability(candles, signalIndex, selectedPeriod, tickSize);
-  const channelTouch = Math.abs(signal.low - currentLdc) <= tickSize / 2;
+  const channelTouch = priceToTicks(signal.low, tickSize) === priceToTicks(currentLdc, tickSize);
 
   const candleScore = 25 * closeLocation;
   const wickScore = 15 * clamp(lowerWickRatio / 0.5);
   const recoveryScore = 20 * clamp(atrRecovery / 1.5);
   const volumeScore = 15 * (volumeZ === null ? 0.5 : clamp(0.5 + volumeZ / 4));
   const changeScore = 15 * cpScore;
-  const stabilityScore = 10 * clamp(stability.count / (PERIOD_RADIUS * 2 + 1));
+  const stabilityScore = 10 * clamp(stability.count / (PERIOD_STABILITY_RADIUS * 2 + 1));
   const score = Math.round(
     (candleScore + wickScore + recoveryScore + volumeScore + changeScore + stabilityScore) * 100,
   ) / 100;
