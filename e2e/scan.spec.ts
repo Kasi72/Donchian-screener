@@ -203,6 +203,22 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
   await expect(details).toContainText("Previous Donchian low₹90.00");
   await expect(details).toContainText("Strategy versionrules-v1");
 
+  const tearSheetFormat = details.getByLabel("Export tear sheet");
+  await tearSheetFormat.selectOption("word");
+  const wordDownloadPromise = page.waitForEvent("download");
+  await details.getByRole("button", { name: "Export", exact: true }).click();
+  const wordDownload = await wordDownloadPromise;
+  expect(wordDownload.suggestedFilename()).toBe("donchian-tear-sheet-reliance.doc");
+
+  await tearSheetFormat.selectOption("pdf");
+  const pdfPopupPromise = page.waitForEvent("popup");
+  await details.getByRole("button", { name: "Export", exact: true }).click();
+  const pdfPopup = await pdfPopupPromise;
+  await pdfPopup.waitForLoadState();
+  await expect(pdfPopup).toHaveTitle(/Donchian Reversal Screener - RELIANCE/);
+  await expect(pdfPopup.locator("body")).toContainText("Trade plan");
+  await pdfPopup.close();
+
   const downloadedCsv = await readDownloadedCsv(
     page,
     "Export filtered (3)",

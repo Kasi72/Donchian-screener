@@ -78,6 +78,7 @@ export function SignalDetails({
   recommendation: BuyRecommendation;
 }) {
   const [exportFormat, setExportFormat] = useState<TearSheetFormat>("pdf");
+  const [exportError, setExportError] = useState<string | null>(null);
   const confirmation = recommendation.confirmation;
   const sequential = recommendation.sequentialEvidence;
   const diagnostics = recommendation.tradeDiagnostics;
@@ -222,10 +223,22 @@ export function SignalDetails({
                   <option value="pdf">PDF (print / save)</option>
                   <option value="word">Word (.doc)</option>
                 </select>
-                <button type="button" className="details-export-button" onClick={() => exportTraderTearSheet(recommendation, exportFormat)}>
+                <button
+                  type="button"
+                  className="details-export-button"
+                  onClick={() => {
+                    setExportError(null);
+                    try {
+                      exportTraderTearSheet(recommendation, exportFormat);
+                    } catch (error) {
+                      setExportError(error instanceof Error ? error.message : "The tear sheet could not be exported.");
+                    }
+                  }}
+                >
                   Export
                 </button>
               </div>
+              {exportError ? <p className="details-export-error" role="alert">{exportError}</p> : null}
             </div>
           </header>
           <DetailSection title="Decision" description="The plain-language answer and confidence status.">

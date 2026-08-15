@@ -147,14 +147,27 @@ export function exportTraderTearSheet(recommendation: BuyRecommendation, format:
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(url);
+    // Some browsers resolve the download asynchronously. Revoking in the
+    // same tick can leave a zero-byte or missing Word file.
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
     return;
   }
-  const printWindow = window.open("", "_blank", "noopener,noreferrer");
+  // Keep the popup same-origin so document.write() can populate it. Using
+  // noopener here can produce an inaccessible blank tab in some browsers.
+  const printWindow = window.open("", "_blank");
   if (!printWindow) throw new Error("Please allow pop-ups to export the PDF tear sheet.");
+  let printed = false;
+  const print = () => {
+    if (printed || printWindow.closed) return;
+    printed = true;
+    printWindow.focus();
+    printWindow.print();
+  };
+  printWindow.addEventListener("load", print, { once: true });
   printWindow.document.open();
   printWindow.document.write(html);
   printWindow.document.close();
-  printWindow.focus();
-  window.setTimeout(() => printWindow.print(), 250);
+  // The load event is the normal path; the fallback handles browsers that do
+  // not emit it for a document populated with document.write().
+  window.setTimeout(print, 750);
 }
