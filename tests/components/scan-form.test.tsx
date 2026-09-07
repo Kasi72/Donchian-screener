@@ -45,6 +45,20 @@ const BUY: BuyRecommendation = {
   scoreComponents: { prominence: 0.5, recovery: 0.5, recency: 0.5, retests: 0.5, relativeVolume: 0.5, higherTimeframeAgreement: 0 },
   higherTimeframeInput: "NEUTRAL_UNAVAILABLE",
   anchorRationale: "Confirmed structural pivot selected causally.",
+  signalState: "EVIDENCE_SUPPORTED",
+  confirmation: {
+    version: "confirmation-v2", score: 70, grade: "CONFIRMED", closeLocation: 0.8,
+    lowerWickRatio: 0.4, atrRecovery: 1, volumeZScore: null, changePointScore: 0.6,
+    validPeriodCount: 1, validPeriodRange: [94, 94], higherTimeframe: "UNAVAILABLE",
+    relativeStrength: "UNAVAILABLE", reasons: [],
+  },
+  tradeDiagnostics: {
+    version: "trade-diagnostics-v2", reversalProbability: null, reversalConfidenceInterval: null,
+    target1BeforeStopProbability: null, target2BeforeStopProbability: null, comparableSignals: null,
+    target1Wins: null, stopFirstOutcomes: null, medianBarsToTarget1: null, medianMae: null,
+    medianMfe: null, maximumHoldingCandles: 10, marketRegime: "UNAVAILABLE",
+    dataQuality: "NOT_AUDITED", calibration: "UNAVAILABLE", evidenceQualityScore: 65, tradeQualityScore: null,
+  },
 };
 
 function jsonResponse(body: unknown, status = 200): Response {

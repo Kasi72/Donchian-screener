@@ -59,7 +59,7 @@ function DetailSection({
 
 function stateClass(state: string): string | undefined {
   if (state === "EARLIEST_CANDIDATE") return "signal-state--candidate";
-  if (state === "CONFIRMED_REVERSAL") return "signal-state--confirmed";
+  if (state === "CONFIRMED_REVERSAL" || state === "EVIDENCE_SUPPORTED") return "signal-state--confirmed";
   return undefined;
 }
 
@@ -94,6 +94,7 @@ export function SignalDetails({
     : `${(diagnostics.reversalProbability * 100).toFixed(1)}% (walk-forward model)`;
 
   const decisionFields: DetailField[] = [
+    ["Confirmation meaning", "Scores describe evidence at the signal close. Subsequent price follow-through has not been evaluated."],
     ["Signal state", signalState, stateClass(signalState)],
     [
       "Reversal confirmation",
@@ -130,11 +131,14 @@ export function SignalDetails({
   ];
 
   const tradeFields: DetailField[] = [
-    ["Entry trigger", formatPrice(recommendation.entry)],
+    ["Entry reference", formatPrice(recommendation.entry)],
     ["Protective stop", formatPrice(recommendation.stop)],
     ["Target 1", formatPrice(recommendation.target1)],
     ["Target 2", formatPrice(recommendation.target2)],
-    ["Planned reward/risk", recommendation.rewardRisk.toFixed(2)],
+    ["Target 1 reward/risk", ((recommendation.target1 - recommendation.entry) / (recommendation.entry - recommendation.stop)).toFixed(2)],
+    ["Target 2 reward/risk", ((recommendation.target2 - recommendation.entry) / (recommendation.entry - recommendation.stop)).toFixed(2)],
+    ["Room to reaction high (R)", recommendation.rewardRisk.toFixed(2)],
+    ["Execution", "Next obtainable price; recalculate risk and reward after gaps. Reference prices are not guaranteed fills."],
     ["Reaction high", formatPrice(recommendation.reactionHigh)],
     ["Maximum holding period", diagnostics ? `${diagnostics.maximumHoldingCandles} candles` : "Unavailable"],
   ];
@@ -147,7 +151,7 @@ export function SignalDetails({
     ["Reversal gate", gateText],
     ["Auto period", String(recommendation.autoPeriod)],
     ...(recommendation.periodStability
-      ? [["Period robustness", recommendation.periodStability.map(({ period, validNeighborCount, neighborhoodSize }) => `${period}:${validNeighborCount}/${neighborhoodSize}`).join(" | ")]] as DetailField[]
+      ? [["Period audit meaning", "Only one period can pass exact touch plus rising LDC. Neighbour counts do not measure confidence."]] as DetailField[]
       : []),
     ...(recommendation.periodAudit
       ? [["Nearby-period audit (N±2)", recommendation.periodAudit.map(({ period, touchPassed, rolloverPassed, valid }) => `${period}:${valid ? "VALID" : `${touchPassed ? "touch" : "no-touch"}/${rolloverPassed ? "rollover" : "no-rollover"}`}`).join(" | ")]] as DetailField[]
@@ -168,7 +172,7 @@ export function SignalDetails({
         ["Overlay evidence score", sequential.overlayScore === undefined ? "Unavailable" : `${sequential.overlayScore.toFixed(2)}/1.00`],
         ["Trend state", sequential.trendState ?? "Unavailable"],
         ["Trend persistence", sequential.trendPersistenceScore === undefined ? "Unavailable" : `${(sequential.trendPersistenceScore * 100).toFixed(1)}%`],
-        ["Stable periods", `${confirmation.validPeriodRange[0]}–${confirmation.validPeriodRange[1]} (${confirmation.validPeriodCount} valid)`],
+        ["Qualifying period audit", `${confirmation.validPeriodRange[0]}–${confirmation.validPeriodRange[1]} (${confirmation.validPeriodCount} valid)`],
         ["Confirmation reasons", confirmation.reasons.join("; ")],
       ]
     : [];

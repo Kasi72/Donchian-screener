@@ -22,6 +22,7 @@ const STATUS_LABELS: Record<ScanItemResult["status"], string> = {
   STALE_DATA: "Market data is stale",
   INVALID_CANDLES: "Market data could not be validated",
   PROVIDER_ERROR: "Market data provider error",
+  CALCULATION_ERROR: "Signal calculation failed",
   DATA_QUALITY_LIMITATION: "Market data calendar or adjustment coverage is limited",
   PROVIDER_TIMEOUT: "Market data request timed out",
   INVALID_INSTRUMENT: "Instrument is not supported",

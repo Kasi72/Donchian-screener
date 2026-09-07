@@ -4,12 +4,12 @@ import { bullishRollover } from "./donchian";
 import { priceToTicks } from "./ticks";
 import { PERIOD_STABILITY_RADIUS } from "./period-selector";
 
-export const REVERSAL_CONFIRMATION_VERSION = "confirmation-v1" as const;
+export const REVERSAL_CONFIRMATION_VERSION = "confirmation-v2" as const;
 
 export type ReversalConfirmationGrade = "STRONG" | "CONFIRMED" | "CORE_ONLY";
 
 export interface ReversalConfirmation {
-  version: typeof REVERSAL_CONFIRMATION_VERSION;
+  version: typeof REVERSAL_CONFIRMATION_VERSION | "confirmation-v1";
   score: number;
   grade: ReversalConfirmationGrade;
   closeLocation: number;
@@ -128,9 +128,10 @@ export function calculateReversalConfirmation(
   const recoveryScore = 20 * clamp(atrRecovery / 1.5);
   const volumeScore = 15 * (volumeZ === null ? 0.5 : clamp(0.5 + volumeZ / 4));
   const changeScore = 15 * cpScore;
-  const stabilityScore = 10 * clamp(stability.count / (PERIOD_STABILITY_RADIUS * 2 + 1));
+  // Exact touch plus strict rollover admits at most one period. Neighbour
+  // counts are a window audit, never independent evidence of confidence.
   const score = Math.round(
-    (candleScore + wickScore + recoveryScore + volumeScore + changeScore + stabilityScore) * 100,
+    ((candleScore + wickScore + recoveryScore + volumeScore + changeScore) / 90) * 100 * 100,
   ) / 100;
   const grade: ReversalConfirmationGrade =
     score >= 75 ? "STRONG" : score >= 60 ? "CONFIRMED" : "CORE_ONLY";
@@ -142,7 +143,6 @@ export function calculateReversalConfirmation(
   if (atrRecovery >= 0.5) reasons.push("recovered at least 0.5 ATR from the low");
   if (volumeZ !== null && volumeZ >= 1) reasons.push("volume is unusually high versus its baseline");
   if (cpScore >= 0.6) reasons.push("returns show a positive change-point impulse");
-  if (stability.count >= 3) reasons.push(`Donchian condition remains valid across ${stability.count} nearby periods`);
   if (reasons.length === 0) reasons.push("Donchian rules pass, but secondary confirmation is limited");
 
   // Keep the explicit input in the calculation contract so callers cannot

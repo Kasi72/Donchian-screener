@@ -111,6 +111,7 @@ export type ScanStatus =
   | CandleResponse["status"]
   | "INVALID_INSTRUMENT"
   | "TICK_SIZE_UNRESOLVED"
+  | "CALCULATION_ERROR"
   | "PROVIDER_ERROR";
 
 export interface ScanItemResult {
@@ -365,7 +366,7 @@ export async function scanSymbol(
   } catch {
     return {
       symbol: instrument.symbol,
-      status: "PROVIDER_ERROR",
+      status: "CALCULATION_ERROR",
       message: `Scan evaluation failed for ${instrument.symbol}.`,
     };
   }

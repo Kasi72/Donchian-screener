@@ -1070,6 +1070,7 @@ tbody tr:last-child > * {
   color: var(--signal-candidate);
 }
 
+.table-signal-state--evidence_supported,
 .table-signal-state--confirmed_reversal {
   color: var(--signal-confirmed);
 }

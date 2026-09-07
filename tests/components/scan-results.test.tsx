@@ -135,7 +135,9 @@ describe("ScanResults", () => {
     expect(details).toHaveTextContent("Strategy versionrules-v1");
     expect(details).toHaveTextContent("Yahoo symbolRELIANCE.NS");
     expect(details).toHaveTextContent("Price adjustmentBACK_ADJUSTED");
-    expect(details).toHaveTextContent("Planned reward/risk2.00");
+    expect(details).toHaveTextContent("Room to reaction high (R)2.00");
+    expect(details).toHaveTextContent("Target 1 reward/risk1.00");
+    expect(details).toHaveTextContent("Target 2 reward/risk2.00");
     expect(details).toHaveTextContent("Anchor rationaleConfirmed structural pivot selected causally.");
     expect(screen.getByLabelText("Export tear sheet")).toBeInTheDocument();
     expect(details.querySelector('option[value="pdf"]')).toHaveTextContent("PDF (print / save)");

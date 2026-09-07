@@ -1,15 +1,16 @@
 import type { DailyCandleWindowAudit } from "@/lib/market/window-audit";
 import type { ReversalConfirmation } from "./reversal-confirmation";
 import type { SequentialEvidence } from "./sequential-evidence";
+import executionPolicy from "./execution-policy.json";
 
-export const TRADE_DIAGNOSTICS_VERSION = "trade-diagnostics-v1" as const;
+export const TRADE_DIAGNOSTICS_VERSION = "trade-diagnostics-v2" as const;
 
-export type CalibrationStatus = "UNAVAILABLE" | "WALK_FORWARD_VALIDATED";
-export type DataQualityStatus = "VERIFIED" | "LIMITED";
+export type CalibrationStatus = "UNAVAILABLE" | "UNVALIDATED_MODEL" | "WALK_FORWARD_VALIDATED";
+export type DataQualityStatus = "VERIFIED" | "LIMITED" | "NOT_AUDITED" | "SESSION_WINDOW_COMPLETE";
 export type MarketRegime = "BULLISH" | "NEUTRAL_TO_BULLISH" | "NEUTRAL" | "UNAVAILABLE";
 
 export interface TradeDiagnostics {
-  version: typeof TRADE_DIAGNOSTICS_VERSION;
+  version: typeof TRADE_DIAGNOSTICS_VERSION | "trade-diagnostics-v1";
   /** Only populated after an out-of-sample calibration model is supplied. */
   reversalProbability: number | null;
   reversalConfidenceInterval: [number, number] | null;
@@ -52,14 +53,12 @@ export function calculateTradeDiagnostics({
   windowAudit?: DailyCandleWindowAudit;
 }): TradeDiagnostics {
   const calibrated = sequential.calibratedProbability;
-  const dataQuality: DataQualityStatus = windowAudit && !windowAudit.complete ? "LIMITED" : "VERIFIED";
-  const marketRegime: MarketRegime = sequential.trendState === "CONFIRMED_FLIP"
-    ? "BULLISH"
-    : sequential.trendState === "DEVELOPING_FLIP"
-      ? "NEUTRAL_TO_BULLISH"
-      : sequential.trendState === "REVERSAL_CANDIDATE"
-        ? "NEUTRAL"
-        : "UNAVAILABLE";
+  const dataQuality: DataQualityStatus = !windowAudit ? "NOT_AUDITED"
+    : windowAudit.complete && windowAudit.expectedSessions > 0 &&
+      windowAudit.observedSessions === windowAudit.expectedSessions && windowAudit.missingSessions === 0
+      ? "SESSION_WINDOW_COMPLETE" : "LIMITED";
+  // Stock trend evidence cannot establish the wider market's regime.
+  const marketRegime: MarketRegime = "UNAVAILABLE";
   const rewardQuality = clamp((rewardRisk - 1) / 2);
   const evidenceQualityScore = round(100 * clamp(
     0.45 * confirmation.score / 100 +
@@ -70,7 +69,8 @@ export function calculateTradeDiagnostics({
 
   return {
     version: TRADE_DIAGNOSTICS_VERSION,
-    reversalProbability: calibrated,
+    // A fitted calibrator alone supplies no walk-forward validation provenance.
+    reversalProbability: null,
     reversalConfidenceInterval: null,
     target1BeforeStopProbability: null,
     target2BeforeStopProbability: null,
@@ -80,10 +80,10 @@ export function calculateTradeDiagnostics({
     medianBarsToTarget1: null,
     medianMae: null,
     medianMfe: null,
-    maximumHoldingCandles: 10,
+    maximumHoldingCandles: executionPolicy.maximumHoldingCandles,
     marketRegime,
     dataQuality,
-    calibration: calibrated === null ? "UNAVAILABLE" : "WALK_FORWARD_VALIDATED",
+    calibration: calibrated === null ? "UNAVAILABLE" : "UNVALIDATED_MODEL",
     evidenceQualityScore,
     tradeQualityScore: null,
   };

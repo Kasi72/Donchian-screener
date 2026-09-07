@@ -3,8 +3,8 @@ import { applyPlattCalibration, type PlattCalibrationModel } from "./calibration
 
 export const SEQUENTIAL_EVIDENCE_VERSION = "sequential-v1" as const;
 
-export type ReversalState = "EARLIEST_CANDIDATE" | "CONFIRMED_REVERSAL";
-export type TrendState = "REVERSAL_CANDIDATE" | "DEVELOPING_FLIP" | "CONFIRMED_FLIP";
+export type ReversalState = "EARLIEST_CANDIDATE" | "EVIDENCE_SUPPORTED" | "CONFIRMED_REVERSAL";
+export type TrendState = "REVERSAL_CANDIDATE" | "DEVELOPING_FLIP" | "TREND_EVIDENCE_SUPPORTED" | "CONFIRMED_FLIP";
 
 export interface SequentialEvidence {
   version: typeof SEQUENTIAL_EVIDENCE_VERSION;
@@ -192,8 +192,8 @@ function trendPersistence(values: number[], trendProbabilityValue: number): { sc
   if (score >= 0.7 && positiveRate >= 2 / 3) {
     return {
       score,
-      state: "CONFIRMED_FLIP",
-      summary: "Donchian reversal is confirmed and recent candles support an upward trend flip.",
+      state: "TREND_EVIDENCE_SUPPORTED",
+      summary: "Donchian setup has upward trend evidence at the signal close. Subsequent follow-through has not been evaluated.",
     };
   }
   if (score >= 0.5) {
@@ -242,7 +242,6 @@ export function calculateSequentialEvidence(
   const calibratedProbability = calibrationModel
     ? applyPlattCalibration(calibrationModel, reversalProbability)
     : null;
-  const decisionScore = calibratedProbability ?? reversalProbability;
   return {
     version: SEQUENTIAL_EVIDENCE_VERSION,
     cusumScore,
@@ -252,7 +251,8 @@ export function calculateSequentialEvidence(
     reversalScore: reversalProbability,
     calibration: calibrationModel ? "PLATT" : "UNCALIBRATED",
     calibratedProbability,
-    state: decisionScore >= 0.65 ? "CONFIRMED_REVERSAL" : "EARLIEST_CANDIDATE",
+    // Same-candle evidence does not establish subsequent price follow-through.
+    state: reversalProbability >= 0.65 ? "EVIDENCE_SUPPORTED" : "EARLIEST_CANDIDATE",
     sampleSize: values.length,
     sgSlope,
     sgCurvature,

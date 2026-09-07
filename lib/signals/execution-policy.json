@@ -1,0 +1,6 @@
+{
+  "version": "execution-v1",
+  "maximumHoldingCandles": 10,
+  "exitTarget": "target1",
+  "sameBarPolicy": "stop-first"
+}

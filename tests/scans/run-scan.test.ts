@@ -136,9 +136,9 @@ describe("scanSymbol", () => {
       },
     });
     expect(result.recommendation?.stop).toBeLessThan(102);
-    expect(result.recommendation?.confirmation?.version).toBe("confirmation-v1");
+    expect(result.recommendation?.confirmation?.version).toBe("confirmation-v2");
     expect(result.recommendation?.confirmation?.grade).toBe("CONFIRMED");
-    expect(result.recommendation?.signalState).toMatch(/EARLIEST_CANDIDATE|CONFIRMED_REVERSAL/);
+    expect(result.recommendation?.signalState).toMatch(/EARLIEST_CANDIDATE|EVIDENCE_SUPPORTED/);
     expect(result.recommendation?.sequentialEvidence?.version).toBe("sequential-v1");
     expect(result.recommendation?.signalLow).toBe(95.02);
     expect(result.recommendation?.signalClose).toBe(102);

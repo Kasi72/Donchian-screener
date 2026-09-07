@@ -28,7 +28,7 @@ describe("calculateReversalConfirmation", () => {
 
     const result = calculateReversalConfirmation(history, 39, 10, 90, 0.05);
 
-    expect(result.version).toBe("confirmation-v1");
+    expect(result.version).toBe("confirmation-v2");
     expect(result.score).toBeGreaterThanOrEqual(60);
     expect(result.closeLocation).toBeCloseTo(11 / 13, 6);
     expect(result.lowerWickRatio).toBeCloseTo(6 / 13, 6);
@@ -52,14 +52,18 @@ describe("calculateReversalConfirmation", () => {
     expect(withFuture).toEqual(base);
   });
 
-  it("reports period stability instead of treating one arbitrary length as certainty", () => {
+  it("audits the unique qualifying period without penalizing its evidence score", () => {
     const history = candles();
     history[29] = { time: 29, open: 86, high: 88, low: 80, close: 84, volume: 1_000 };
     history[39] = { time: 39, open: 96, high: 103, low: 90, close: 101, volume: 3_000 };
 
     const result = calculateReversalConfirmation(history, 39, 10, 90, 0.05);
 
-    expect(result.validPeriodCount).toBeGreaterThanOrEqual(1);
+    expect(result.validPeriodCount).toBe(1);
+    // Changing only the audit window must not change candle evidence.
+    const other = calculateReversalConfirmation(history, 39, 5, 90, 0.05);
+    expect(other.validPeriodCount).toBe(0);
+    expect(other.score).toBe(result.score);
     expect(result.validPeriodRange[0]).toBeLessThanOrEqual(10);
     expect(result.validPeriodRange[1]).toBeGreaterThanOrEqual(10);
     expect(result.reasons.length).toBeGreaterThan(0);

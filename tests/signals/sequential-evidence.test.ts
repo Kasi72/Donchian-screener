@@ -50,7 +50,8 @@ describe("calculateSequentialEvidence", () => {
     expect(Number.isFinite(evidence.volatilityZ)).toBe(true);
     expect(evidence.overlayScore).toBeGreaterThan(0.5);
     expect(evidence.trendPersistenceScore).toBeGreaterThan(0.5);
-    expect(evidence.trendState).toMatch(/DEVELOPING_FLIP|CONFIRMED_FLIP/);
+    expect(evidence.trendState).toMatch(/DEVELOPING_FLIP|TREND_EVIDENCE_SUPPORTED/);
+    expect(evidence.state).not.toBe("CONFIRMED_REVERSAL");
     expect(evidence.traderSummary).toContain("Donchian");
 
     candles.push({ time: 99, open: 1, high: 2, low: 0.5, close: 1.9, volume: 99_000 });

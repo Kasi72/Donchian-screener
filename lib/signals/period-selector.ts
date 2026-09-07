@@ -183,29 +183,14 @@ export function selectHighestPeriodCandidate(
 }
 
 /**
- * Ranks valid periods by local stability before using the structural score.
- * A period remains eligible when its own Donchian gate passes; neighboring
- * periods are evidence about parameter fragility, not an additional hard gate.
+ * Compatibility wrapper. Neighbour counts cannot rank exact rollover periods.
  */
 export function selectStablePeriodCandidate(
   candidates: PeriodCandidate[],
   stability: PeriodStability[],
 ): PeriodCandidate | undefined {
-  const stabilityByPeriod = new Map(stability.map((item) => [item.period, item]));
-  let selected: PeriodCandidate | undefined;
-  for (const candidate of candidates) {
-    const currentStability = stabilityByPeriod.get(candidate.period)?.stabilityScore ?? 0;
-    if (selected === undefined) {
-      selected = candidate;
-      continue;
-    }
-    const selectedStability = stabilityByPeriod.get(selected.period)?.stabilityScore ?? 0;
-    if (currentStability > selectedStability ||
-      (currentStability === selectedStability && ranksBefore(candidate, selected))) {
-      selected = candidate;
-    }
-  }
-  return selected;
+  void stability;
+  return selectHighestPeriodCandidate(candidates);
 }
 
 function periodStability(
@@ -343,7 +328,9 @@ export function selectRulesPeriod(
   const stability = candidates.map((candidate) =>
     periodStability(candles, signalIndex, candidate.period, tickSize),
   );
-  const selected = selectStablePeriodCandidate(candidates, stability);
+  // Exact touch and rollover have a unique qualifying period. Keep the
+  // neighbourhood for audit only; it cannot measure predictive stability.
+  const selected = selectHighestPeriodCandidate(candidates);
 
   return selected === undefined ? { candidates, stability } : { selected, candidates, stability };
 }

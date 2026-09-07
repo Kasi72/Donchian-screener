@@ -147,7 +147,7 @@ const recommendationSchema = z.object({
   }),
   higherTimeframeInput: z.literal("NEUTRAL_UNAVAILABLE"),
   confirmation: z.object({
-    version: z.literal("confirmation-v1"),
+    version: z.enum(["confirmation-v1", "confirmation-v2"]),
     score: z.number().finite(),
     grade: z.enum(["STRONG", "CONFIRMED", "CORE_ONLY"]),
     closeLocation: z.number().finite(),
@@ -184,6 +184,7 @@ const nonBuyResultSchema = z.object({
     "STALE_DATA",
     "INVALID_CANDLES",
     "PROVIDER_ERROR",
+    "CALCULATION_ERROR",
     "DATA_QUALITY_LIMITATION",
     "PROVIDER_TIMEOUT",
     "INVALID_INSTRUMENT",

@@ -49,7 +49,8 @@ describe("calculateTradeDiagnostics", () => {
     expect(result.tradeQualityScore).toBeNull();
     expect(result.calibration).toBe("UNAVAILABLE");
     expect(result.evidenceQualityScore).toBeGreaterThan(0);
-    expect(result.marketRegime).toBe("NEUTRAL_TO_BULLISH");
+    expect(result.marketRegime).toBe("UNAVAILABLE");
+    expect(result.dataQuality).toBe("NOT_AUDITED");
   });
 
   it("marks incomplete session data as limited", () => {
@@ -61,5 +62,23 @@ describe("calculateTradeDiagnostics", () => {
     });
 
     expect(result.dataQuality).toBe("LIMITED");
+  });
+
+  it("does not certify a fitted probability as walk-forward validated", () => {
+    const result = calculateTradeDiagnostics({ confirmation, sequential: {
+      ...sequential, calibratedProbability: 0.71, calibration: "PLATT",
+    }, rewardRisk: 2 });
+    expect(result.calibration).toBe("UNVALIDATED_MODEL");
+    expect(result.reversalProbability).toBeNull();
+  });
+
+  it("limits a complete-window label to a consistent, positive session audit", () => {
+    const inputs = { confirmation, sequential, rewardRisk: 2 };
+    expect(calculateTradeDiagnostics({ ...inputs, windowAudit: {
+      expectedSessions: 10, observedSessions: 10, missingSessions: 0, complete: true,
+    } }).dataQuality).toBe("SESSION_WINDOW_COMPLETE");
+    expect(calculateTradeDiagnostics({ ...inputs, windowAudit: {
+      expectedSessions: 10, observedSessions: 9, missingSessions: 0, complete: true,
+    } }).dataQuality).toBe("LIMITED");
   });
 });

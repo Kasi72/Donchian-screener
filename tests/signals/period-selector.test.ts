@@ -187,7 +187,7 @@ describe("rules period selection", () => {
     ).toBe(20);
   });
 
-  it("prefers the period with the most stable valid neighborhood before structural score", () => {
+  it("does not rank by impossible neighbouring-period agreement", () => {
     const candidates: PeriodCandidate[] = [
       {
         ...candidateFixtureCandidate(40),
@@ -204,7 +204,7 @@ describe("rules period selection", () => {
         { period: 40, validNeighborCount: 2, neighborhoodSize: 5, stabilityScore: 0.4 },
         { period: 41, validNeighborCount: 4, neighborhoodSize: 5, stabilityScore: 0.8 },
       ])?.period,
-    ).toBe(41);
+    ).toBe(40);
   });
 });
 

@@ -49,6 +49,7 @@ const NON_BUY_STATUSES = new Set<ScanItemResult["status"]>([
   "INVALID_INSTRUMENT",
   "TICK_SIZE_UNRESOLVED",
   "PROVIDER_ERROR",
+  "CALCULATION_ERROR",
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -83,7 +84,7 @@ function isReversalConfirmation(value: unknown): boolean {
   const range = value.validPeriodRange;
   const validPeriodCount = value.validPeriodCount;
   return (
-    value.version === "confirmation-v1" &&
+    (value.version === "confirmation-v1" || value.version === "confirmation-v2") &&
     (value.grade === "STRONG" || value.grade === "CONFIRMED" || value.grade === "CORE_ONLY") &&
     isFiniteNumber(value.score) && value.score >= 0 && value.score <= 100 &&
     isFiniteNumber(value.closeLocation) &&
@@ -117,7 +118,7 @@ function isTradeDiagnostics(value: unknown): boolean {
     (interval[0] as number) <= (interval[1] as number)
   );
   return (
-    value.version === "trade-diagnostics-v1" &&
+    (value.version === "trade-diagnostics-v1" || value.version === "trade-diagnostics-v2") &&
     isProbability(value.reversalProbability) &&
     validInterval &&
     isProbability(value.target1BeforeStopProbability) &&
@@ -130,8 +131,8 @@ function isTradeDiagnostics(value: unknown): boolean {
     (value.medianMfe === null || isFiniteNumber(value.medianMfe)) &&
     isNonNegativeInteger(value.maximumHoldingCandles) &&
     ["BULLISH", "NEUTRAL_TO_BULLISH", "NEUTRAL", "UNAVAILABLE"].includes(value.marketRegime as string) &&
-    ["VERIFIED", "LIMITED"].includes(value.dataQuality as string) &&
-    ["UNAVAILABLE", "WALK_FORWARD_VALIDATED"].includes(value.calibration as string) &&
+    ["VERIFIED", "LIMITED", "NOT_AUDITED", "SESSION_WINDOW_COMPLETE"].includes(value.dataQuality as string) &&
+    ["UNAVAILABLE", "UNVALIDATED_MODEL", "WALK_FORWARD_VALIDATED"].includes(value.calibration as string) &&
     isFiniteNumber(value.evidenceQualityScore) && value.evidenceQualityScore >= 0 && value.evidenceQualityScore <= 100 &&
     (value.tradeQualityScore === null || (isFiniteNumber(value.tradeQualityScore) && value.tradeQualityScore >= 0 && value.tradeQualityScore <= 100))
   );
