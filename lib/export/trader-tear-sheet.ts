@@ -44,6 +44,9 @@ export function buildTearSheetSections(recommendation: BuyRecommendation): TearS
   const sequential = recommendation.sequentialEvidence;
   const diagnostics = recommendation.tradeDiagnostics;
   const signalState = recommendation.signalState ?? sequential?.state ?? "EARLIEST_CANDIDATE";
+  const calibrationText = diagnostics?.calibration && diagnostics.calibration !== "UNAVAILABLE"
+    ? diagnostics.calibration
+    : "Not active - purged walk-forward calibration pending";
 
   return [
     {
@@ -54,9 +57,12 @@ export function buildTearSheetSections(recommendation: BuyRecommendation): TearS
         ["Signal", "BUY"],
         ["Signal state", signalState],
         ["Reversal confirmation", confirmation ? `${confirmation.grade} (${confirmation.score.toFixed(2)}/100)` : "Unavailable"],
-        ["Reversal probability", diagnostics?.reversalProbability === null || diagnostics === undefined ? "Not calibrated - evidence score only" : `${(diagnostics.reversalProbability * 100).toFixed(1)}%`],
+        ["Reversal probability", diagnostics?.reversalProbability === null || diagnostics === undefined ? "Not calibrated - evidence score only (walk-forward outcomes pending)" : `${(diagnostics.reversalProbability * 100).toFixed(1)}%`],
+        ["95% confidence interval", diagnostics?.reversalConfidenceInterval ? `${(diagnostics.reversalConfidenceInterval[0] * 100).toFixed(1)}%-${(diagnostics.reversalConfidenceInterval[1] * 100).toFixed(1)}%` : "Pending calibration - needs purged walk-forward outcomes"],
+        ["Target 1 before stop", diagnostics?.target1BeforeStopProbability === null || diagnostics === undefined ? "Pending calibration - needs completed triple-barrier outcomes" : `${(diagnostics.target1BeforeStopProbability * 100).toFixed(1)}%`],
         ["Evidence quality", diagnostics ? `${diagnostics.evidenceQualityScore.toFixed(1)}/100` : "Unavailable"],
-        ["Calibration", diagnostics?.calibration ?? "Unavailable"],
+        ["Trade quality score", diagnostics?.tradeQualityScore === null || diagnostics === undefined ? "Pending calibration - needs cost-adjusted out-of-sample outcomes" : `${diagnostics.tradeQualityScore.toFixed(1)}/100`],
+        ["Calibration", calibrationText],
         ["Trader read", sequential?.traderSummary ?? "Donchian rules pass; follow-through is not confirmed."],
         ["Tier score", recommendation.tierScore === undefined ? "Unavailable" : `${recommendation.tierScore.toFixed(1)}/100`],
         ["Entry readiness", recommendation.entryReadiness ?? "Unavailable"],
@@ -125,7 +131,9 @@ export function buildTearSheetSections(recommendation: BuyRecommendation): TearS
         ["Tick size / policy", `${recommendation.tickSize} / ${recommendation.tickPolicy}`],
         ["Market regime", diagnostics?.marketRegime ?? "Unavailable"],
         ["Data quality", diagnostics?.dataQuality ?? "Unavailable"],
-        ["Historical comparable signals", diagnostics?.comparableSignals === null || diagnostics === undefined ? "Unavailable - calibration dataset not loaded" : String(diagnostics.comparableSignals)],
+        ["Higher timeframe", "Not configured - no higher-timeframe candles supplied (neutral by design)"],
+        ["Historical comparable signals", diagnostics?.comparableSignals === null || diagnostics === undefined ? "Pending - calibration dataset not loaded" : String(diagnostics.comparableSignals)],
+        ["Median MAE / MFE", diagnostics?.medianMae === null || diagnostics?.medianMfe === null || diagnostics === undefined ? "Pending - requires completed triple-barrier outcomes" : `${money(diagnostics.medianMae)} / ${money(diagnostics.medianMfe)}`],
         ["Anchor rationale", recommendation.anchorRationale],
       ],
     },

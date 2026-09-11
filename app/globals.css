@@ -1026,6 +1026,11 @@ tbody tr:last-child > * {
   color: var(--confirmation-core);
 }
 
+.details-region dd.detail-value--pending {
+  color: var(--muted);
+  font-weight: 600;
+}
+
 @media (max-width: 760px) {
   .details-hero {
     grid-template-columns: 1fr;

@@ -87,8 +87,11 @@ export function SignalDetails({
   const signalState = recommendation.signalState ?? sequential?.state ?? "EARLIEST_CANDIDATE";
   const gateText = displayedGate(recommendation);
   const calibratedText = diagnostics?.reversalProbability === null || diagnostics === undefined
-    ? "Not calibrated — evidence score only"
+    ? "Not calibrated — evidence score only (walk-forward outcomes pending)"
     : `${(diagnostics.reversalProbability * 100).toFixed(1)}% (walk-forward model)`;
+  const calibrationText = diagnostics?.calibration && diagnostics.calibration !== "UNAVAILABLE"
+    ? diagnostics.calibration
+    : "Not active — purged walk-forward calibration pending";
 
   const decisionFields: DetailField[] = [
     ...traderAssessmentFields(recommendation),
@@ -111,13 +114,15 @@ export function SignalDetails({
       "95% confidence interval",
       diagnostics?.reversalConfidenceInterval
         ? `${(diagnostics.reversalConfidenceInterval[0] * 100).toFixed(1)}%–${(diagnostics.reversalConfidenceInterval[1] * 100).toFixed(1)}%`
-        : "Unavailable until calibrated",
+        : "Pending calibration — needs purged walk-forward outcomes",
+      diagnostics?.reversalConfidenceInterval ? undefined : "detail-value--pending",
     ],
     [
       "Target 1 before stop",
       diagnostics?.target1BeforeStopProbability === null || diagnostics === undefined
-        ? "Unavailable until outcome calibration"
+        ? "Pending calibration — needs completed triple-barrier outcomes"
         : `${(diagnostics.target1BeforeStopProbability * 100).toFixed(1)}%`,
+      diagnostics?.target1BeforeStopProbability === null || diagnostics === undefined ? "detail-value--pending" : undefined,
     ],
     [
       "Evidence quality score",
@@ -126,8 +131,9 @@ export function SignalDetails({
     [
       "Trade quality score",
       diagnostics?.tradeQualityScore === null || diagnostics === undefined
-        ? "Unavailable until outcome calibration"
+        ? "Pending calibration — needs cost-adjusted out-of-sample outcomes"
         : `${diagnostics.tradeQualityScore.toFixed(1)}/100`,
+      diagnostics?.tradeQualityScore === null || diagnostics === undefined ? "detail-value--pending" : undefined,
     ],
     ["Actionability", diagnostics?.actionability ?? "STRUCTURAL_ONLY"],
     ...(sequential ? [["Trader read", sequential.traderSummary ?? "Evidence is informational; follow-through is not confirmed."]] as DetailField[] : []),
@@ -205,12 +211,12 @@ export function SignalDetails({
     ["Structural score", `${recommendation.score.toFixed(4)} (${recommendation.scoreVersion})`],
     ["Anchor rationale", recommendation.anchorRationale],
     ["Strategy version", sequential ? `${recommendation.strategyVersion} / evidence ${sequential.version}` : recommendation.strategyVersion],
-    ["Higher timeframe", "Neutral — input unavailable"],
+    ["Higher timeframe", "Not configured — no higher-timeframe candles supplied (neutral by design)", "detail-value--pending"],
     ["Market regime", diagnostics?.marketRegime ?? "Unavailable"],
     ["Data quality", diagnostics?.dataQuality ?? "Unavailable"],
-    ["Calibration", diagnostics?.calibration ?? "Unavailable"],
-    ["Comparable historical signals", diagnostics?.comparableSignals === null || diagnostics === undefined ? "Unavailable — calibration dataset not loaded" : String(diagnostics.comparableSignals)],
-    ["Median MAE / MFE", diagnostics?.medianMae === null || diagnostics?.medianMfe === null || diagnostics === undefined ? "Unavailable — requires historical outcomes" : `${formatPrice(diagnostics.medianMae)} / ${formatPrice(diagnostics.medianMfe)}`],
+    ["Calibration", calibrationText, diagnostics?.calibration && diagnostics.calibration !== "UNAVAILABLE" ? undefined : "detail-value--pending"],
+    ["Comparable historical signals", diagnostics?.comparableSignals === null || diagnostics === undefined ? "Pending — calibration dataset not loaded" : String(diagnostics.comparableSignals), diagnostics?.comparableSignals === null || diagnostics === undefined ? "detail-value--pending" : undefined],
+    ["Median MAE / MFE", diagnostics?.medianMae === null || diagnostics?.medianMfe === null || diagnostics === undefined ? "Pending — requires completed triple-barrier outcomes" : `${formatPrice(diagnostics.medianMae)} / ${formatPrice(diagnostics.medianMfe)}`, diagnostics?.medianMae === null || diagnostics?.medianMfe === null || diagnostics === undefined ? "detail-value--pending" : undefined],
   ];
 
   return (
