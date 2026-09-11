@@ -1,5 +1,6 @@
 import type { Candle } from "@/lib/market/provider";
 import { applyPlattCalibration, type PlattCalibrationModel } from "./calibration";
+import { classifyMarketRegime, type QuantMarketRegime } from "./market-regime";
 
 export const SEQUENTIAL_EVIDENCE_VERSION = "sequential-v1" as const;
 
@@ -30,6 +31,10 @@ export interface SequentialEvidence {
   trendPersistenceScore?: number;
   trendState?: TrendState;
   traderSummary?: string;
+  /** Robust causal regime evidence; informational unless a validated model uses it. */
+  marketRegime?: QuantMarketRegime;
+  regimeTrendZ?: number;
+  regimeVolatilityPercentile?: number;
 }
 
 const EPSILON = 1e-9;
@@ -233,6 +238,7 @@ export function calculateSequentialEvidence(
   const { slope: sgSlope, curvature: sgCurvature } = causalSavitzkyGolay(candles, signalIndex);
   const overlay = additionalOverlay(values, sgSlope, sgCurvature);
   const persistence = trendPersistence(values, trendProbabilityValue);
+  const regime = classifyMarketRegime(candles, signalIndex, Math.min(LOOKBACK, signalIndex + 1));
   const reversalProbability = clamp(
     0.32 * cusumScore +
       0.28 * changeProbability +
@@ -261,5 +267,8 @@ export function calculateSequentialEvidence(
     trendPersistenceScore: persistence.score,
     trendState: persistence.state,
     traderSummary: persistence.summary,
+    marketRegime: regime.regime,
+    regimeTrendZ: regime.trendZ,
+    regimeVolatilityPercentile: regime.volatilityPercentile,
   };
 }

@@ -30,6 +30,8 @@ export interface TradeDiagnostics {
   evidenceQualityScore: number;
   /** Requires target probabilities from walk-forward outcomes. */
   tradeQualityScore: number | null;
+  /** Provenance for the statistical safeguards applied to this observation. */
+  validationNotes?: string[];
 }
 
 function clamp(value: number, minimum = 0, maximum = 1): number {
@@ -58,7 +60,9 @@ export function calculateTradeDiagnostics({
       windowAudit.observedSessions === windowAudit.expectedSessions && windowAudit.missingSessions === 0
       ? "SESSION_WINDOW_COMPLETE" : "LIMITED";
   // Stock trend evidence cannot establish the wider market's regime.
-  const marketRegime: MarketRegime = "UNAVAILABLE";
+  const marketRegime: MarketRegime = sequential.marketRegime === "TRENDING_BULL" ? "BULLISH"
+    : sequential.marketRegime === "TRANSITION" ? "NEUTRAL_TO_BULLISH"
+      : sequential.marketRegime === "RANGE_BOUND" || sequential.marketRegime === "HIGH_VOLATILITY" ? "NEUTRAL" : "UNAVAILABLE";
   const rewardQuality = clamp((rewardRisk - 1) / 2);
   const evidenceQualityScore = round(100 * clamp(
     0.45 * confirmation.score / 100 +
@@ -86,5 +90,11 @@ export function calculateTradeDiagnostics({
     calibration: calibrated === null ? "UNAVAILABLE" : "UNVALIDATED_MODEL",
     evidenceQualityScore,
     tradeQualityScore: null,
+    validationNotes: [
+      "Donchian gate is hard and causal; overlays only rank evidence.",
+      "Probability is withheld until purged walk-forward triple-barrier outcomes are calibrated.",
+      "Causal smoothing uses completed candles only; no centered filter is used.",
+      "Uncertainty should be reported with conformal intervals and Bayesian shrinkage when a model is fitted.",
+    ],
   };
 }

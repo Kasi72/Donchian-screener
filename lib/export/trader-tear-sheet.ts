@@ -58,6 +58,8 @@ export function buildTearSheetSections(recommendation: BuyRecommendation): TearS
         ["Evidence quality", diagnostics ? `${diagnostics.evidenceQualityScore.toFixed(1)}/100` : "Unavailable"],
         ["Calibration", diagnostics?.calibration ?? "Unavailable"],
         ["Trader read", sequential?.traderSummary ?? "Donchian rules pass; follow-through is not confirmed."],
+        ["Tier score", recommendation.tierScore === undefined ? "Unavailable" : `${recommendation.tierScore.toFixed(1)}/100`],
+        ["Entry readiness", recommendation.entryReadiness ?? "Unavailable"],
       ],
     },
     {
@@ -101,7 +103,10 @@ export function buildTearSheetSections(recommendation: BuyRecommendation): TearS
         ["CUSUM evidence", `${(sequential.cusumScore * 100).toFixed(1)}%`],
         ["Trend state", sequential.trendState ?? "Unavailable"],
         ["Trend persistence", sequential.trendPersistenceScore === undefined ? "Unavailable" : `${(sequential.trendPersistenceScore * 100).toFixed(1)}%`],
+        ["Regime trend z-score", sequential.regimeTrendZ === undefined ? "Unavailable" : sequential.regimeTrendZ.toFixed(2)],
+        ["Regime volatility percentile", sequential.regimeVolatilityPercentile === undefined ? "Unavailable" : `${(sequential.regimeVolatilityPercentile * 100).toFixed(1)}%`],
         ["Confirmation reasons", confirmation.reasons.join("; ")],
+        ...(diagnostics?.validationNotes?.length ? [["Validation safeguards", diagnostics.validationNotes.join(" ")] as [string, string]] : []),
       ] : [["Status", "Confirmation evidence unavailable"]],
     },
     {

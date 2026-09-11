@@ -173,9 +173,13 @@ export function SignalDetails({
         ["Robust volatility z-score", sequential.volatilityZ === undefined ? "Unavailable" : sequential.volatilityZ.toFixed(2)],
         ["Overlay evidence score", sequential.overlayScore === undefined ? "Unavailable" : `${sequential.overlayScore.toFixed(2)}/1.00`],
         ["Trend state", sequential.trendState ?? "Unavailable"],
+        ["Market regime", diagnostics?.marketRegime ?? sequential.marketRegime ?? "Unavailable"],
+        ["Regime trend z-score", sequential.regimeTrendZ === undefined ? "Unavailable" : sequential.regimeTrendZ.toFixed(2)],
+        ["Regime volatility percentile", sequential.regimeVolatilityPercentile === undefined ? "Unavailable" : `${(sequential.regimeVolatilityPercentile * 100).toFixed(1)}%`],
         ["Trend persistence", sequential.trendPersistenceScore === undefined ? "Unavailable" : `${(sequential.trendPersistenceScore * 100).toFixed(1)}%`],
         ["Qualifying period audit", `${confirmation.validPeriodRange[0]}–${confirmation.validPeriodRange[1]} (${confirmation.validPeriodCount} valid)`],
         ["Confirmation reasons", confirmation.reasons.join("; ")],
+        ...(diagnostics?.validationNotes?.length ? [["Validation safeguards", diagnostics.validationNotes.join(" ")] as DetailField] : []),
       ]
     : [];
 
