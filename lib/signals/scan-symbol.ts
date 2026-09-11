@@ -40,6 +40,7 @@ import {
   type TradeDiagnostics,
 } from "./trade-diagnostics";
 import { calculateTradeLevels } from "./risk-levels";
+import { atrAt } from "./atr";
 import { classifySignalTier, type EntryReadiness, type SignalTier } from "./signal-tier";
 import { priceToTicks } from "./ticks";
 import {
@@ -77,6 +78,9 @@ export interface BuyRecommendation {
   providerAsOf?: number;
   rolloverTicks?: number;
   touchDistanceTicks?: number;
+  /** LDC rise normalized by causal ATR; informational and non-gating. */
+  rolloverStrengthAtr?: number;
+  rolloverQuality?: "MEANINGFUL" | "MARGINAL";
   periodCandidateCount?: number;
   periodStability?: PeriodStability[];
   periodAudit?: PeriodAudit[];
@@ -294,6 +298,10 @@ export async function scanSymbol(
     if (levels === null) {
       return { symbol: instrument.symbol, status: "NO_SIGNAL" };
     }
+    const signalAtr = atrAt(candleResponse.candles, signalIndex, ATR_PERIOD);
+    const currentLdcTick = priceToTicks(selected.currentLdc, tickResolution.tickSize);
+    const previousLdcTick = priceToTicks(selected.previousLdc, tickResolution.tickSize);
+    const rolloverStrengthAtr = (currentLdcTick - previousLdcTick) * tickResolution.tickSize / Math.max(signalAtr, tickResolution.tickSize);
     const confirmation = calculateReversalConfirmation(
       candleResponse.candles,
       signalIndex,
@@ -356,6 +364,8 @@ export async function scanSymbol(
           priceToTicks(signal.low, tickResolution.tickSize) -
             priceToTicks(selected.currentLdc, tickResolution.tickSize),
         ),
+      rolloverStrengthAtr,
+      rolloverQuality: rolloverStrengthAtr >= 0.1 ? "MEANINGFUL" : "MARGINAL",
       periodCandidateCount: selection.candidates.length,
       periodStability: selection.stability,
       periodAudit: auditPeriodNeighborhood(

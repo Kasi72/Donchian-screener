@@ -149,6 +149,7 @@ export function SignalDetails({
   const donchianFields: DetailField[] = [
     ["Current Donchian low", formatPrice(recommendation.currentLdc)],
     ["Previous Donchian low", formatPrice(recommendation.previousLdc)],
+    ["Rollover strength", recommendation.rolloverStrengthAtr === undefined ? "Unavailable" : `${recommendation.rolloverStrengthAtr.toFixed(3)} ATR (${recommendation.rolloverQuality ?? "UNAVAILABLE"})`],
     ["Signal candle low", recommendation.signalLow === undefined ? "Unavailable" : formatPrice(recommendation.signalLow)],
     ["Signal candle close", recommendation.signalClose === undefined ? "Unavailable" : formatPrice(recommendation.signalClose)],
     ["Reversal gate", gateText],

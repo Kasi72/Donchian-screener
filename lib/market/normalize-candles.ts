@@ -216,6 +216,14 @@ export function normalizeCandles(
       hasInvalidPayload = true;
       continue;
     }
+    const existing = unique.get(candidate.time);
+    if (existing !== undefined && (existing.open !== candle.open || existing.high !== candle.high || existing.low !== candle.low || existing.close !== candle.close || existing.volume !== candle.volume)) {
+      // Conflicting duplicate timestamps are ambiguous market data. Keeping
+      // whichever quote Yahoo returned last would make the signal non-
+      // reproducible, so fail closed instead.
+      hasInvalidPayload = true;
+      continue;
+    }
     unique.set(candidate.time, candle);
   }
 

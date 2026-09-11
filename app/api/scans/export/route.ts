@@ -45,6 +45,8 @@ const CSV_HEADERS = [
   "providerAsOf",
   "rolloverTicks",
   "touchDistanceTicks",
+  "rolloverStrengthAtr",
+  "rolloverQuality",
   "periodCandidateCount",
   "periodAudit",
   "windowAudit",
@@ -113,6 +115,8 @@ const recommendationSchema = z.object({
   providerAsOf: z.number().finite().optional(),
   rolloverTicks: z.number().int().nonnegative().optional(),
   touchDistanceTicks: z.number().int().nonnegative().optional(),
+  rolloverStrengthAtr: z.number().finite().nonnegative().optional(),
+  rolloverQuality: z.enum(["MEANINGFUL", "MARGINAL"]).optional(),
   periodCandidateCount: z.number().int().positive().optional(),
   periodAudit: z.array(z.object({
     period: z.number().int().positive(),
@@ -265,6 +269,8 @@ export function scanResultsToCsv(results: readonly ScanItemResult[]): string {
       providerAsOf: recommendation?.providerAsOf ?? recommendation?.dataAsOf,
       rolloverTicks: recommendation?.rolloverTicks,
       touchDistanceTicks: recommendation?.touchDistanceTicks,
+      rolloverStrengthAtr: recommendation?.rolloverStrengthAtr,
+      rolloverQuality: recommendation?.rolloverQuality,
       periodCandidateCount: recommendation?.periodCandidateCount,
       periodAudit: recommendation?.periodAudit
         ? JSON.stringify(recommendation.periodAudit)
