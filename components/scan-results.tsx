@@ -45,8 +45,11 @@ const priceFormatter = new Intl.NumberFormat("en-IN", {
 const COLUMNS: Array<{ column: ResultColumn; label: string; numeric?: boolean }> = [
   { column: "symbol", label: "Instrument" },
   { column: "status", label: "Status" },
+  { column: "tier", label: "Trade tier" },
   { column: "signalState", label: "Signal state" },
   { column: "confirmation", label: "Reversal confirmation" },
+  { column: "tierScore", label: "Tier score", numeric: true },
+  { column: "entryReadiness", label: "Entry readiness" },
   { column: "entry", label: "Entry reference", numeric: true },
   { column: "stop", label: "Stop", numeric: true },
   { column: "target1", label: "Target 1", numeric: true },
@@ -206,12 +209,32 @@ export function ScanResults({
           />
         </div>
         <div className="toolbar-field">
+          <label htmlFor="filter-tier">Trade tier filter</label>
+          <input
+            id="filter-tier"
+            type="search"
+            placeholder="confirmed, developing, early"
+            value={filters.tier ?? ""}
+            onChange={(event) => setFilterValue("tier", event.target.value)}
+          />
+        </div>
+        <div className="toolbar-field">
           <label htmlFor="filter-signal-state">Signal state filter</label>
           <input
             id="filter-signal-state"
             type="search"
             value={filters.signalState ?? ""}
             onChange={(event) => setFilterValue("signalState", event.target.value)}
+          />
+        </div>
+        <div className="toolbar-field">
+          <label htmlFor="filter-readiness">Entry readiness filter</label>
+          <input
+            id="filter-readiness"
+            type="search"
+            placeholder="wait, review, skip"
+            value={filters.entryReadiness ?? ""}
+            onChange={(event) => setFilterValue("entryReadiness", event.target.value)}
           />
         </div>
         <div className="toolbar-field">
@@ -245,6 +268,16 @@ export function ScanResults({
             </label>
           </div>
         ))}
+        <div className="toolbar-range">
+          <label>
+            Minimum tier score
+            <input type="number" min="0" max="100" inputMode="decimal" value={String(filters.minTierScore ?? "")} onChange={(event) => setFilterValue("minTierScore", event.target.value)} />
+          </label>
+          <label>
+            Maximum tier score
+            <input type="number" min="0" max="100" inputMode="decimal" value={String(filters.maxTierScore ?? "")} onChange={(event) => setFilterValue("maxTierScore", event.target.value)} />
+          </label>
+        </div>
         <div className="toolbar-range">
           <label>
             Data as of from
@@ -289,8 +322,8 @@ export function ScanResults({
                 </label>
               </th>
               {COLUMNS.map(({ column, label, numeric }) => (
-                <th key={column} scope="col" className={`${column === "symbol" ? "instrument-column" : ""}${numeric ? " number-cell" : ""}${column === "signalState" ? " signal-state-column" : ""}${column === "confirmation" ? " confirmation-column" : ""}`} aria-sort={sortLabel(sort, column)}>
-                  <button className={`sort-button${column === "signalState" || column === "confirmation" ? " sort-button--wrap" : ""}`} type="button" onClick={() => toggleSort(column)} aria-label={`Sort by ${label}`}>
+                <th key={column} scope="col" className={`${column === "symbol" ? "instrument-column" : ""}${numeric ? " number-cell" : ""}${column === "signalState" || column === "tier" || column === "entryReadiness" ? " signal-state-column" : ""}${column === "confirmation" ? " confirmation-column" : ""}`} aria-sort={sortLabel(sort, column)}>
+                  <button className={`sort-button${column === "signalState" || column === "tier" || column === "confirmation" || column === "entryReadiness" ? " sort-button--wrap" : ""}`} type="button" onClick={() => toggleSort(column)} aria-label={`Sort by ${label}`}>
                     {label} {sort?.column === column ? (sort.direction === "asc" ? "↑" : "↓") : null}
                   </button>
                 </th>
@@ -321,11 +354,18 @@ export function ScanResults({
                     </td>
                     <th scope="row" className="instrument-column">{result.symbol}</th>
                     <td className={result.status === "BUY" ? "buy-status" : "status-copy"}>{statusText(result)}</td>
+                    <td className={`table-tier table-tier--${result.recommendation?.signalTier?.toLowerCase() ?? "none"}`}>
+                      {result.recommendation?.signalTier?.replaceAll("_", " ") ?? "—"}
+                    </td>
                     <td className={`table-signal-state table-signal-state--${signalStateText(result).toLowerCase()}`}>
                       {signalStateText(result)}
                     </td>
                     <td className={`table-confirmation table-confirmation--${result.recommendation?.confirmation?.grade?.toLowerCase() ?? "none"}`}>
                       {confirmationText(result)}
+                    </td>
+                    <td className="number-cell">{result.recommendation?.tierScore?.toFixed(1) ?? "—"}</td>
+                    <td className={`table-readiness table-readiness--${result.recommendation?.entryReadiness?.toLowerCase() ?? "none"}`}>
+                      {result.recommendation?.entryReadiness?.replaceAll("_", " ") ?? "—"}
                     </td>
                     <td className="number-cell">{formatPrice(recommendation?.entry)}</td>
                     <td className="number-cell">{formatPrice(recommendation?.stop)}</td>

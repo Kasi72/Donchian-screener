@@ -38,6 +38,7 @@ import {
   type TradeDiagnostics,
 } from "./trade-diagnostics";
 import { calculateTradeLevels } from "./risk-levels";
+import { classifySignalTier, type EntryReadiness, type SignalTier } from "./signal-tier";
 import { priceToTicks } from "./ticks";
 import {
   ATR_PERIOD,
@@ -101,6 +102,11 @@ export interface BuyRecommendation {
   signalState?: ReversalState;
   sequentialEvidence?: SequentialEvidence;
   tradeDiagnostics?: TradeDiagnostics;
+  signalTier?: SignalTier;
+  tierScore?: number;
+  entryReadiness?: EntryReadiness;
+  tierReason?: string;
+  tierWarnings?: string[];
   companyName?: string;
   industry?: string;
 }
@@ -292,6 +298,14 @@ export async function scanSymbol(
       rewardRisk: levels.rewardRisk,
       ...(windowAudit ? { windowAudit } : {}),
     });
+    const tier = classifySignalTier({
+      confirmation,
+      sequential: sequentialEvidence,
+      rewardRisk: levels.rewardRisk,
+      dataQuality: tradeDiagnostics.dataQuality,
+      stop: levels.stop,
+      target1: levels.target1,
+    });
 
     const recommendation: BuyRecommendation = {
       recommendation: "BUY",
@@ -356,6 +370,11 @@ export async function scanSymbol(
       signalState: sequentialEvidence.state,
       sequentialEvidence,
       tradeDiagnostics,
+      signalTier: tier.tier,
+      tierScore: tier.tierScore,
+      entryReadiness: tier.entryReadiness,
+      tierReason: tier.tierReason,
+      tierWarnings: tier.warnings,
       ...(resolvedInstrument.companyName
         ? { companyName: resolvedInstrument.companyName }
         : {}),

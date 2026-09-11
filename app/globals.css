@@ -709,7 +709,7 @@ thead .instrument-column {
 
 .instrument-column {
   position: sticky;
-  left: 48px;
+  left: 52px;
   z-index: 1;
   background: var(--surface);
 }
@@ -737,27 +737,33 @@ table {
   font-size: 14px;
 }
 
-/* Keep the diagnostic table fully readable at desktop widths. Narrow screens
-   retain the intentional horizontal scroll via the 1040px minimum width. */
+/* Keep the diagnostic table readable while allowing the added tier fields to
+   fit at desktop widths. Narrow screens retain intentional horizontal scroll. */
 table th:nth-child(1), table td:nth-child(1) { width: 48px; }
-table th:nth-child(2), table td:nth-child(2) { width: 100px; }
-table th:nth-child(3), table td:nth-child(3) { width: 70px; }
-table th:nth-child(4), table td:nth-child(4) { width: 120px; }
-table th:nth-child(5), table td:nth-child(5) { width: 140px; }
-table th:nth-child(6), table td:nth-child(6),
-table th:nth-child(7), table td:nth-child(7),
-table th:nth-child(8), table td:nth-child(8),
-table th:nth-child(9), table td:nth-child(9) { width: 90px; }
-table th:nth-child(10), table td:nth-child(10) { width: 70px; }
-table th:nth-child(11), table td:nth-child(11) { width: 120px; }
-table th:nth-child(12), table td:nth-child(12) { width: 82px; }
+table th:nth-child(2), table td:nth-child(2) { width: 75px; }
+table th:nth-child(3), table td:nth-child(3) { width: 55px; }
+table th:nth-child(4), table td:nth-child(4) { width: 82px; }
+table th:nth-child(5), table td:nth-child(5) { width: 82px; }
+table th:nth-child(6), table td:nth-child(6) { width: 82px; }
+table th:nth-child(7), table td:nth-child(7) { width: 55px; }
+table th:nth-child(8), table td:nth-child(8) { width: 70px; }
+table th:nth-child(9), table td:nth-child(9),
+table th:nth-child(10), table td:nth-child(10),
+table th:nth-child(11), table td:nth-child(11),
+table th:nth-child(12), table td:nth-child(12) { width: 60px; }
+table th:nth-child(13), table td:nth-child(13) { width: 55px; }
+table th:nth-child(14), table td:nth-child(14) { width: 90px; }
+
+@media (min-width: 1101px) {
+  table { min-width: 0; }
+}
 
 .details-column {
   position: sticky;
   right: 0;
   z-index: 3;
-  width: 92px !important;
-  min-width: 92px;
+  width: 80px !important;
+  min-width: 80px;
   white-space: nowrap;
   background: var(--surface);
   box-shadow: -8px 0 12px rgb(13 31 25 / 8%);
@@ -1045,12 +1051,21 @@ tbody tr:last-child > * {
 }
 
 .table-signal-state,
-.table-confirmation {
+.table-confirmation,
+.table-tier,
+.table-readiness {
   font-weight: 700;
   max-width: 150px;
   overflow-wrap: anywhere;
   white-space: normal;
 }
+
+.table-tier--confirmed_reversal { color: var(--signal-confirmed); }
+.table-tier--developing_reversal { color: #65b9ff; }
+.table-tier--early_candidate { color: var(--signal-candidate); }
+.table-readiness--wait_next_open { color: #65b9ff; }
+.table-readiness--review_risk { color: var(--confirmation-core); }
+.table-readiness--skip { color: #ff8f8f; }
 
 .signal-state-column,
 .confirmation-column {

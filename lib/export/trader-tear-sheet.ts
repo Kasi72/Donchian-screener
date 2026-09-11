@@ -1,4 +1,5 @@
 import type { BuyRecommendation } from "@/lib/signals/scan-symbol";
+import { displayedGate, traderAssessmentFields } from "@/lib/signals/trader-assessment";
 
 export type TearSheetFormat = "word" | "pdf";
 
@@ -43,18 +44,15 @@ export function buildTearSheetSections(recommendation: BuyRecommendation): TearS
   const sequential = recommendation.sequentialEvidence;
   const diagnostics = recommendation.tradeDiagnostics;
   const signalState = recommendation.signalState ?? sequential?.state ?? "EARLIEST_CANDIDATE";
-  const rollover = recommendation.currentLdcTick !== undefined && recommendation.previousLdcTick !== undefined
-    ? recommendation.currentLdcTick > recommendation.previousLdcTick
-    : recommendation.currentLdc > recommendation.previousLdc;
 
   return [
     {
       title: "Decision",
       description: "The plain-language answer and confidence status.",
       fields: [
+        ...traderAssessmentFields(recommendation),
         ["Signal", "BUY"],
         ["Signal state", signalState],
-        ["Confirmation meaning", "Scores describe evidence at the signal close. Subsequent price follow-through has not been evaluated."],
         ["Reversal confirmation", confirmation ? `${confirmation.grade} (${confirmation.score.toFixed(2)}/100)` : "Unavailable"],
         ["Reversal probability", diagnostics?.reversalProbability === null || diagnostics === undefined ? "Not calibrated - evidence score only" : `${(diagnostics.reversalProbability * 100).toFixed(1)}%`],
         ["Evidence quality", diagnostics ? `${diagnostics.evidenceQualityScore.toFixed(1)}/100` : "Unavailable"],
@@ -85,7 +83,7 @@ export function buildTearSheetSections(recommendation: BuyRecommendation): TearS
         ["Previous Donchian low", money(recommendation.previousLdc)],
         ["Signal candle low", valueOrUnavailable(recommendation.signalLow, money)],
         ["Signal candle close", valueOrUnavailable(recommendation.signalClose, money)],
-        ["Reversal gate", rollover ? "PASS - signal low touches the current LDC and the LDC has risen" : "FAIL - channel is flat/falling"],
+        ["Reversal gate", displayedGate(recommendation)],
         ["Auto period", String(recommendation.autoPeriod)],
         ["Period audit meaning", "Only one period can pass exact touch plus rising LDC. Neighbour counts do not measure confidence."],
         ["Period audit", recommendation.periodAudit?.map(({ period, valid }) => `${period}:${valid ? "valid" : "invalid"}`).join(" | ") ?? "Unavailable"],

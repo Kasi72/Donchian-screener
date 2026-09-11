@@ -3,6 +3,8 @@
 import { Fragment, useState, type ReactNode } from "react";
 
 import type { BuyRecommendation } from "@/lib/signals/scan-symbol";
+import { displayedGate, traderAssessmentFields } from "@/lib/signals/trader-assessment";
+import { tierLabel } from "@/lib/signals/signal-tier";
 import { exportTraderTearSheet, type TearSheetFormat } from "@/lib/export/trader-tear-sheet";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", {
@@ -83,18 +85,18 @@ export function SignalDetails({
   const sequential = recommendation.sequentialEvidence;
   const diagnostics = recommendation.tradeDiagnostics;
   const signalState = recommendation.signalState ?? sequential?.state ?? "EARLIEST_CANDIDATE";
-  const channelRollover = recommendation.currentLdcTick !== undefined && recommendation.previousLdcTick !== undefined
-    ? recommendation.currentLdcTick > recommendation.previousLdcTick
-    : recommendation.currentLdc > recommendation.previousLdc;
-  const gateText = channelRollover
-    ? "PASS — signal low touches the current LDC and the LDC has risen"
-    : "FAIL — the channel is flat/falling; a touch alone is not a BUY";
+  const gateText = displayedGate(recommendation);
   const calibratedText = diagnostics?.reversalProbability === null || diagnostics === undefined
     ? "Not calibrated — evidence score only"
     : `${(diagnostics.reversalProbability * 100).toFixed(1)}% (walk-forward model)`;
 
   const decisionFields: DetailField[] = [
-    ["Confirmation meaning", "Scores describe evidence at the signal close. Subsequent price follow-through has not been evaluated."],
+    ...traderAssessmentFields(recommendation),
+    ["Trade tier", recommendation.signalTier ? tierLabel(recommendation.signalTier) : "Unavailable", recommendation.signalTier === "CONFIRMED_REVERSAL" ? "confirmation-grade--strong" : recommendation.signalTier === "DEVELOPING_REVERSAL" ? "confirmation-grade--confirmed" : "signal-state--candidate"],
+    ["Tier score", recommendation.tierScore === undefined ? "Unavailable" : `${recommendation.tierScore.toFixed(1)}/100`],
+    ["Entry readiness", recommendation.entryReadiness?.replaceAll("_", " ") ?? "Unavailable"],
+    ["Tier rationale", recommendation.tierReason ?? "Unavailable"],
+    ...(recommendation.tierWarnings?.length ? [["Tier warnings", recommendation.tierWarnings.join("; ")]] as DetailField[] : []),
     ["Signal state", signalState, stateClass(signalState)],
     [
       "Reversal confirmation",

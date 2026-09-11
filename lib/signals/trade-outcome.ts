@@ -5,6 +5,8 @@ import policy from "./execution-policy.json";
 export interface ExecutionOptions {
   horizon?: number;
   exitTarget?: "target1" | "target2";
+  /** Sensitivity analysis only; production/default remains conservative. */
+  sameBarPolicy?: "stop-first" | "target-first";
   /** Applied adversely on market entry/exit, per side. Limit targets never fill below their limit. */
   slippageBps: number;
   /** Combined proportional brokerage, fees and taxes estimate per side. */
@@ -42,6 +44,8 @@ export function evaluateTradeOutcome(
     throw new RangeError("Invalid trade execution inputs");
   }
   const targetName = options.exitTarget ?? policy.exitTarget;
+  const sameBarPolicy = options.sameBarPolicy ?? "stop-first";
+  if (sameBarPolicy !== "stop-first" && sameBarPolicy !== "target-first") throw new RangeError("Invalid same-bar policy");
   if (targetName !== "target1" && targetName !== "target2") throw new RangeError("Invalid exit target");
   const target = levels[targetName];
   const start = signalIndex + 1;
@@ -77,6 +81,8 @@ export function evaluateTradeOutcome(
     const c = candles[j];
     if (c.open <= levels.stop) return finish("STOP", c.open * (1 - slip), j);
     if (c.open >= target) return finish(targetName === "target1" ? "TARGET1" : "TARGET2", target, j);
+    if (c.low <= levels.stop && c.high >= target && sameBarPolicy === "target-first")
+      return finish(targetName === "target1" ? "TARGET1" : "TARGET2", target, j, true);
     if (c.low <= levels.stop) return finish("STOP", levels.stop * (1 - slip), j, c.high >= target);
     if (c.high >= target) return finish(targetName === "target1" ? "TARGET1" : "TARGET2", target, j);
   }

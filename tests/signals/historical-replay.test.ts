@@ -2,6 +2,8 @@ import { expect, it, vi } from "vitest";
 import * as evidence from "@/lib/signals/sequential-evidence";
 import { replayHistoricalSignals } from "@/lib/signals/historical-replay";
 import { scanSymbol } from "@/lib/signals/scan-symbol";
+import * as scanner from "@/lib/signals/scan-symbol";
+import type { BuyRecommendation } from "@/lib/signals/scan-symbol";
 
 function fixture() {
   const candle = (time: number, low = 110, high = 112, close = 111) => ({ time: time * 60_000, open: close, low, high, close, volume: 1000 });
@@ -36,6 +38,24 @@ it("rejects duplicate or malformed history instead of changing candle counts", a
   const candles = fixture();
   candles[99].time = candles[98].time;
   await expect(replayHistoricalSignals({ symbol: "RELIANCE" }, "1d", candles, { slippageBps: 0, feeBps: 0 })).rejects.toThrow();
+});
+
+it("records overlapping prediction observations while keeping portfolio trades non-overlapping", async () => {
+  const candles = Array.from({ length: 35 }, (_, i) => ({ time: i * 60_000, open: 100, high: 105, low: 95, close: 100, volume: 1000 }));
+  const spy = vi.spyOn(scanner, "scanSymbol").mockImplementation(async (_instrument, _timeframe, provider) => {
+    const response = await provider.getCandles("RELIANCE.NS", "1h");
+    if (response.status !== "OK") throw new Error("fixture response");
+    return { symbol: "RELIANCE", status: "BUY", recommendation: {
+      symbol: "RELIANCE", timeframe: "1h", signalTime: response.candles.at(-1)!.time,
+      entry: 100, stop: 90, target1: 110, target2: 120, reactionHigh: 130,
+    } as BuyRecommendation };
+  });
+  try {
+    const report = await replayHistoricalSignals({ symbol: "RELIANCE" }, "1h", candles, { feeBps: 0, slippageBps: 0 });
+    expect(report.signals).toHaveLength(15);
+    expect(report.trades.length).toBeLessThan(report.signals.length);
+    expect(report.signals.filter((r) => r.jointOutcome === null)).toHaveLength(10);
+  } finally { spy.mockRestore(); }
 });
 
 it("distinguishes a calculation defect from a market-data provider failure", async () => {
