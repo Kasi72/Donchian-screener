@@ -12,7 +12,9 @@ import type {
 } from "@/lib/market/provider";
 import {
   auditDailyCandleWindow,
+  auditIntradayCandleWindow,
   type DailyCandleWindowAudit,
+  type IntradayCandleWindowAudit,
 } from "@/lib/market/window-audit";
 import {
   auditPeriodNeighborhood,
@@ -79,6 +81,7 @@ export interface BuyRecommendation {
   periodStability?: PeriodStability[];
   periodAudit?: PeriodAudit[];
   windowAudit?: DailyCandleWindowAudit;
+  intradayWindowAudit?: IntradayCandleWindowAudit;
   anchorIndex?: number;
   anchorBarsAgo?: number;
   anchorTime: number;
@@ -272,6 +275,16 @@ export async function scanSymbol(
         message: `Incomplete daily Donchian window: ${windowAudit.missingSessions} NSE session(s) missing.`,
       };
     }
+    const intradayWindowAudit = timeframe === "5m" || timeframe === "15m" || timeframe === "1h"
+      ? auditIntradayCandleWindow(candleResponse.candles, signalIndex - selected.period + 1, signalIndex, timeframe)
+      : undefined;
+    if (intradayWindowAudit !== undefined && !intradayWindowAudit.complete) {
+      return {
+        symbol: instrument.symbol,
+        status: "NO_SIGNAL",
+        message: `Incomplete intraday Donchian window: ${intradayWindowAudit.missingBars} bar(s) missing.`,
+      };
+    }
     const levels = calculateTradeLevels(
       candleResponse.candles,
       signalIndex,
@@ -297,6 +310,7 @@ export async function scanSymbol(
       sequential: sequentialEvidence,
       rewardRisk: levels.rewardRisk,
       ...(windowAudit ? { windowAudit } : {}),
+      ...(intradayWindowAudit ? { intradayWindowAudit } : {}),
     });
     const tier = classifySignalTier({
       confirmation,

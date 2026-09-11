@@ -129,6 +129,7 @@ export function SignalDetails({
         ? "Unavailable until outcome calibration"
         : `${diagnostics.tradeQualityScore.toFixed(1)}/100`,
     ],
+    ["Actionability", diagnostics?.actionability ?? "STRUCTURAL_ONLY"],
     ...(sequential ? [["Trader read", sequential.traderSummary ?? "Evidence is informational; follow-through is not confirmed."]] as DetailField[] : []),
   ];
 

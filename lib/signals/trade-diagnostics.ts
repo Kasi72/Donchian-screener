@@ -8,6 +8,7 @@ export const TRADE_DIAGNOSTICS_VERSION = "trade-diagnostics-v2" as const;
 export type CalibrationStatus = "UNAVAILABLE" | "UNVALIDATED_MODEL" | "WALK_FORWARD_VALIDATED";
 export type DataQualityStatus = "VERIFIED" | "LIMITED" | "NOT_AUDITED" | "SESSION_WINDOW_COMPLETE";
 export type MarketRegime = "BULLISH" | "NEUTRAL_TO_BULLISH" | "NEUTRAL" | "UNAVAILABLE";
+export type ActionabilityStatus = "STRUCTURAL_ONLY" | "ACTIONABLE" | "AVOID";
 
 export interface TradeDiagnostics {
   version: typeof TRADE_DIAGNOSTICS_VERSION | "trade-diagnostics-v1";
@@ -32,6 +33,7 @@ export interface TradeDiagnostics {
   tradeQualityScore: number | null;
   /** Provenance for the statistical safeguards applied to this observation. */
   validationNotes?: string[];
+  actionability?: ActionabilityStatus;
 }
 
 function clamp(value: number, minimum = 0, maximum = 1): number {
@@ -96,5 +98,7 @@ export function calculateTradeDiagnostics({
       "Causal smoothing uses completed candles only; no centered filter is used.",
       "Uncertainty should be reported with conformal intervals and Bayesian shrinkage when a model is fitted.",
     ],
+    // No calibrated, cost-adjusted outcome model is active in production.
+    actionability: "STRUCTURAL_ONLY",
   };
 }
