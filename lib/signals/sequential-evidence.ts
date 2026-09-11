@@ -1,6 +1,8 @@
 import type { Candle } from "@/lib/market/provider";
 import { applyPlattCalibration, type PlattCalibrationModel } from "./calibration";
 import { classifyMarketRegime, type QuantMarketRegime } from "./market-regime";
+import { calculateMovingAverageEvidence, type MovingAverageEvidence } from "./moving-averages";
+import { atrAt } from "./atr";
 
 export const SEQUENTIAL_EVIDENCE_VERSION = "sequential-v1" as const;
 
@@ -31,6 +33,8 @@ export interface SequentialEvidence {
   trendPersistenceScore?: number;
   trendState?: TrendState;
   traderSummary?: string;
+  movingAverages?: MovingAverageEvidence;
+  maEvidenceScore?: number;
   /** Robust causal regime evidence; informational unless a validated model uses it. */
   marketRegime?: QuantMarketRegime;
   regimeTrendZ?: number;
@@ -239,6 +243,7 @@ export function calculateSequentialEvidence(
   const overlay = additionalOverlay(values, sgSlope, sgCurvature);
   const persistence = trendPersistence(values, trendProbabilityValue);
   const regime = classifyMarketRegime(candles, signalIndex, Math.min(LOOKBACK, signalIndex + 1));
+  const maEvidence = calculateMovingAverageEvidence(candles, signalIndex, atrAt(candles, signalIndex, 14));
   const reversalProbability = clamp(
     0.32 * cusumScore +
       0.28 * changeProbability +
@@ -263,12 +268,14 @@ export function calculateSequentialEvidence(
     sgSlope,
     sgCurvature,
     volatilityZ: overlay.volatilityZ,
-    overlayScore: overlay.score,
+    overlayScore: clamp(0.8 * overlay.score + 0.2 * maEvidence.score),
     trendPersistenceScore: persistence.score,
     trendState: persistence.state,
     traderSummary: persistence.summary,
     marketRegime: regime.regime,
     regimeTrendZ: regime.trendZ,
     regimeVolatilityPercentile: regime.volatilityPercentile,
+    movingAverages: maEvidence,
+    maEvidenceScore: maEvidence.score,
   };
 }
