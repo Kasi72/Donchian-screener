@@ -5,7 +5,7 @@ import { Fragment, useState, type ReactNode } from "react";
 import type { BuyRecommendation } from "@/lib/signals/scan-symbol";
 import { displayedGate, traderAssessmentFields } from "@/lib/signals/trader-assessment";
 import { tierLabel } from "@/lib/signals/signal-tier";
-import { exportTraderTearSheet, type TearSheetFormat } from "@/lib/export/trader-tear-sheet";
+import { buildWhatsAppSummary, exportTraderTearSheet, type TearSheetFormat } from "@/lib/export/trader-tear-sheet";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", {
   dateStyle: "medium",
@@ -91,6 +91,7 @@ export function SignalDetails({
 }) {
   const [exportFormat, setExportFormat] = useState<TearSheetFormat>("pdf");
   const [exportError, setExportError] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   const confirmation = recommendation.confirmation;
   const sequential = recommendation.sequentialEvidence;
   const diagnostics = recommendation.tradeDiagnostics;
@@ -154,10 +155,13 @@ export function SignalDetails({
     ["Protective stop", formatPrice(recommendation.stop)],
     ["Target 1", formatPrice(recommendation.target1)],
     ["Target 2", formatPrice(recommendation.target2)],
-    ["Target 1 reward/risk", ((recommendation.target1 - recommendation.entry) / (recommendation.entry - recommendation.stop)).toFixed(2)],
-    ["Target 2 reward/risk", ((recommendation.target2 - recommendation.entry) / (recommendation.entry - recommendation.stop)).toFixed(2)],
+    ["Risk per share", recommendation.riskPerShare === undefined ? formatPrice(recommendation.entry - recommendation.stop) : formatPrice(recommendation.riskPerShare)],
+    ["Risk percentage", recommendation.riskPercent === undefined ? `${(((recommendation.entry - recommendation.stop) / recommendation.entry) * 100).toFixed(2)}%` : `${recommendation.riskPercent.toFixed(2)}%`],
+    ["Target 1 reward/risk", recommendation.target1RewardRisk?.toFixed(2) ?? ((recommendation.target1 - recommendation.entry) / (recommendation.entry - recommendation.stop)).toFixed(2)],
+    ["Target 2 reward/risk", recommendation.target2RewardRisk?.toFixed(2) ?? ((recommendation.target2 - recommendation.entry) / (recommendation.entry - recommendation.stop)).toFixed(2)],
     ["Room to reaction high (R)", recommendation.rewardRisk.toFixed(2)],
     ["Execution", "Next obtainable price; recalculate risk and reward after gaps. Reference prices are not guaranteed fills."],
+    ["Stop buffer", recommendation.stopBuffer === undefined ? "Unavailable" : `${formatPrice(recommendation.stopBuffer)} (${recommendation.stopBufferAtr?.toFixed(2) ?? "—"} ATR)`],
     ["Reaction high", formatPrice(recommendation.reactionHigh)],
     ["Maximum holding period", diagnostics ? `${diagnostics.maximumHoldingCandles} candles` : "Unavailable"],
   ];
@@ -263,6 +267,7 @@ export function SignalDetails({
                   onChange={(event) => setExportFormat(event.target.value as TearSheetFormat)}
                 >
                   <option value="pdf">PDF (print / save)</option>
+                  <option value="pdf-compact">PDF (compact tear sheet)</option>
                   <option value="word">Word (.doc)</option>
                 </select>
                 <button
@@ -280,6 +285,21 @@ export function SignalDetails({
                   Export
                 </button>
               </div>
+              <button
+                type="button"
+                className="details-copy-button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(buildWhatsAppSummary(recommendation));
+                    setCopyState("copied");
+                  } catch {
+                    setCopyState("failed");
+                  }
+                }}
+              >
+                {copyState === "copied" ? "Copied for WhatsApp" : "Copy WhatsApp summary"}
+              </button>
+              {copyState === "failed" ? <p className="details-export-error" role="alert">Clipboard access was blocked. Use the PDF tear sheet instead.</p> : null}
               {exportError ? <p className="details-export-error" role="alert">{exportError}</p> : null}
             </div>
           </header>

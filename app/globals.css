@@ -217,6 +217,26 @@ input[type="file"] {
   margin-bottom: 28px;
 }
 
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr);
+  gap: 28px;
+  align-items: stretch;
+  margin-bottom: 30px;
+}
+
+.hero-grid .intro { margin: 0; padding: 18px 0; }
+.hero-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.hero-badges span { padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: 999px; color: var(--buy-dark); font-size: 11px; font-weight: 800; letter-spacing: .05em; }
+.method-summary { padding: 22px; border: 1px solid var(--border); border-radius: 14px; background: linear-gradient(145deg, var(--surface), var(--surface-elevated)); box-shadow: 0 12px 30px rgb(13 31 25 / 6%); }
+.method-summary__eyebrow { margin: 0 0 5px; color: var(--buy-dark); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.method-summary h2 { margin: 0 0 15px; font-size: 20px; letter-spacing: -.02em; }
+.method-summary ol { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; counter-reset: method-step; }
+.method-summary li { position: relative; display: block; padding-top: 12px; border-top: 1px solid var(--border); counter-increment: method-step; }
+.method-summary li::before { content: counter(method-step, decimal-leading-zero); position: absolute; top: 12px; left: 0; color: var(--buy); font-size: 11px; font-weight: 800; }
+.method-summary li strong { display: block; padding-left: 28px; }
+.method-summary li span { display: block; margin-top: 3px; color: var(--muted); font-size: 13px; }
+
 .intro h1 {
   max-width: 680px;
   margin: 0;
@@ -256,6 +276,8 @@ input[type="file"] {
   gap: 20px;
   align-items: start;
 }
+
+.scan-step { margin: 0 0 7px; color: var(--buy); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 
 .field {
   min-width: 0;
@@ -402,6 +424,22 @@ select:disabled {
 .progress-copy {
   margin: 0;
 }
+
+.scan-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 18px 0 12px; }
+.scan-metric { display: grid; gap: 2px; min-height: 72px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-elevated); color: var(--text); text-align: left; cursor: pointer; }
+.scan-metric:hover, .scan-metric:focus-visible { border-color: var(--buy); background: var(--hover); }
+.scan-metric strong { color: var(--buy); font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums; }
+.scan-metric span { color: var(--muted); font-size: 12px; font-weight: 700; }
+.scan-metric--confirmed strong { color: var(--signal-confirmed); }
+.scan-metric--candidate strong { color: var(--signal-candidate); }
+.scan-metric--warning strong { color: var(--error); }
+.results-legend { display: flex; flex-wrap: wrap; gap: 12px 18px; margin: 0 0 14px; color: var(--muted); font-size: 12px; font-weight: 650; }
+.results-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.legend-dot--confirmed { background: var(--signal-confirmed); }
+.legend-dot--developing { background: var(--buy); }
+.legend-dot--candidate { background: var(--signal-candidate); }
+.legend-dot--pending { background: var(--muted); }
 
 .validation-summary details {
   margin-top: 8px;
@@ -1055,6 +1093,24 @@ tbody tr:last-child > * {
   font-weight: 600;
 }
 
+.details-copy-button {
+  margin-top: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.details-copy-button:hover,
+.details-copy-button:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 @media (max-width: 760px) {
   .details-hero {
     grid-template-columns: 1fr;
@@ -1150,6 +1206,8 @@ tbody tr:last-child > * {
 }
 
 @media (max-width: 800px) {
+  .hero-grid { grid-template-columns: 1fr; gap: 16px; }
+  .scan-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .strategy-flow__steps { grid-template-columns: 1fr; }
   .strategy-flow__step { align-items: stretch; flex-direction: column; }
   .strategy-flow__connector { display: block; width: 100%; height: 20px; line-height: 20px; transform: none; text-align: center; }
@@ -1158,6 +1216,8 @@ tbody tr:last-child > * {
 }
 
 @media (max-width: 560px) {
+  .scan-metrics { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .scan-metric { padding: 10px; }
   .strategy-flow { padding: 18px; }
 }
 

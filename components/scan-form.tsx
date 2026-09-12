@@ -14,7 +14,7 @@ type WorkPhase =
   | "scanning"
   | "complete"
   | "exporting";
-type ResultFilter = "ALL" | "BUY" | "NO_SIGNAL" | "DATA_ISSUE";
+type ResultFilter = "ALL" | "BUY" | "CONFIRMED" | "CANDIDATE" | "NO_SIGNAL" | "DATA_ISSUE";
 
 interface RequestError {
   title: string;
@@ -276,6 +276,8 @@ export function ScanForm() {
     () => results.filter((result) => {
       if (resultFilter === "ALL") return true;
       if (resultFilter === "BUY") return result.status === "BUY";
+      if (resultFilter === "CONFIRMED") return result.status === "BUY" && result.recommendation?.signalTier === "CONFIRMED_REVERSAL";
+      if (resultFilter === "CANDIDATE") return result.status === "BUY" && result.recommendation?.signalTier !== "CONFIRMED_REVERSAL";
       if (resultFilter === "NO_SIGNAL") return result.status === "NO_SIGNAL" || result.status === "OK";
       return result.status !== "BUY" && result.status !== "NO_SIGNAL" && result.status !== "OK";
     }),
@@ -485,6 +487,9 @@ export function ScanForm() {
   }
 
   const buyCount = results.filter(({ status }) => status === "BUY").length;
+  const confirmedCount = results.filter(({ status, recommendation }) => status === "BUY" && recommendation?.signalTier === "CONFIRMED_REVERSAL").length;
+  const candidateCount = buyCount - confirmedCount;
+  const warningCount = results.filter(({ status }) => status !== "BUY" && status !== "NO_SIGNAL" && status !== "OK").length;
 
   return (
     <div className="scan-workspace">
@@ -498,6 +503,7 @@ export function ScanForm() {
 
         <div className="scan-controls">
           <div className="field upload-field">
+            <p className="scan-step">01 · Upload universe</p>
             <label htmlFor="stock-list">Upload stock list</label>
             <input
               id="stock-list"
@@ -515,6 +521,7 @@ export function ScanForm() {
           </div>
 
           <div className="field timeframe-field">
+            <p className="scan-step">02 · Choose timeframe</p>
             <label htmlFor="timeframe">Candle timeframe</label>
             <select
               id="timeframe"
@@ -529,15 +536,20 @@ export function ScanForm() {
                 setPhase(instruments.length > 0 ? "ready" : "empty");
               }}
             >
-              {TIMEFRAMES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
+              <optgroup label="Intraday">
+                {TIMEFRAMES.filter(({ value }) => ["5m", "15m", "1h"].includes(value)).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </optgroup>
+              <optgroup label="Swing">
+                {TIMEFRAMES.filter(({ value }) => ["1d", "1wk"].includes(value)).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </optgroup>
+              <optgroup label="Long-term">
+                {TIMEFRAMES.filter(({ value }) => value === "1mo").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </optgroup>
             </select>
           </div>
 
           <div className="scan-actions">
+            <p className="scan-step">03 · Run scan</p>
             <button
               className="primary-action"
               type="button"
@@ -633,6 +645,8 @@ export function ScanForm() {
             >
               <option value="ALL">All results</option>
               <option value="BUY">BUY only</option>
+              <option value="CONFIRMED">Confirmed reversal</option>
+              <option value="CANDIDATE">Developing / early</option>
               <option value="NO_SIGNAL">No signal</option>
               <option value="DATA_ISSUE">Data issues</option>
             </select>
@@ -656,6 +670,13 @@ export function ScanForm() {
         </div>
         {results.length > 0 ? (
           <>
+            <div className="scan-metrics" aria-label="Scan summary">
+              <button type="button" className="scan-metric" onClick={() => setResultFilter("BUY")}><strong>{buyCount}</strong><span>Signals found</span></button>
+              <button type="button" className="scan-metric scan-metric--confirmed" onClick={() => setResultFilter("CONFIRMED")}><strong>{confirmedCount}</strong><span>Confirmed</span></button>
+              <button type="button" className="scan-metric scan-metric--candidate" onClick={() => setResultFilter("CANDIDATE")}><strong>{candidateCount}</strong><span>Candidates</span></button>
+              <button type="button" className="scan-metric scan-metric--warning" onClick={() => setResultFilter("DATA_ISSUE")}><strong>{warningCount}</strong><span>Data warnings</span></button>
+            </div>
+            <p className="results-legend" aria-label="Signal colour legend"><span><i className="legend-dot legend-dot--confirmed" />Confirmed</span><span><i className="legend-dot legend-dot--developing" />Developing</span><span><i className="legend-dot legend-dot--candidate" />Early candidate</span><span><i className="legend-dot legend-dot--pending" />Pending validation</span></p>
             <p className="execution-caveat">
               Entry reference is the completed signal candle close. Actual execution is the next
               obtainable price; skip a gap that reduces reward/risk below your minimum. Each scan

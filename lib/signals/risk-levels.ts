@@ -5,6 +5,7 @@ import {
   PIVOT_LEFT_BARS,
   PIVOT_RIGHT_BARS,
 } from "./strategy-config";
+import { priceToTicks } from "./ticks";
 
 export interface TradeLevels {
   entry: number;
@@ -13,6 +14,13 @@ export interface TradeLevels {
   target2: number;
   reactionHigh: number;
   rewardRisk: number;
+  /** Exchange-tick-safe risk and execution metrics for the trader summary. */
+  riskPerShare?: number;
+  riskPercent?: number;
+  target1RewardRisk?: number;
+  target2RewardRisk?: number;
+  stopBuffer?: number;
+  stopBufferAtr?: number;
 }
 
 function assertInputs(
@@ -141,5 +149,11 @@ export function calculateTradeLevels(
     target2,
     reactionHigh,
     rewardRisk: (reactionHighTicks - entryTicks) / riskTicks,
+    riskPerShare: priceAtTicks(riskTicks, tickSize),
+    riskPercent: (riskTicks * tickSize / Math.max(entryTicks * tickSize, tickSize)) * 100,
+    target1RewardRisk: 1,
+    target2RewardRisk: 2,
+    stopBuffer: priceAtTicks(priceToTicks(signal.low, tickSize) - stopTicks, tickSize),
+    stopBufferAtr: buffer / Math.max(atr, tickSize),
   };
 }

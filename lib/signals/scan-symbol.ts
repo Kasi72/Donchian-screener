@@ -99,6 +99,12 @@ export interface BuyRecommendation {
     | "nse-index-metadata-v1";
   reactionHigh: number;
   rewardRisk: number;
+  riskPerShare?: number;
+  riskPercent?: number;
+  target1RewardRisk?: number;
+  target2RewardRisk?: number;
+  stopBuffer?: number;
+  stopBufferAtr?: number;
   scoreVersion: "structural-v1";
   score: number;
   scoreComponents: StructuralScoreComponents;
@@ -385,6 +391,12 @@ export async function scanSymbol(
       tickPolicy: tickResolution.policy,
       reactionHigh: levels.reactionHigh,
       rewardRisk: levels.rewardRisk,
+      riskPerShare: levels.riskPerShare,
+      riskPercent: levels.riskPercent,
+      target1RewardRisk: levels.target1RewardRisk,
+      target2RewardRisk: levels.target2RewardRisk,
+      stopBuffer: levels.stopBuffer,
+      stopBufferAtr: levels.stopBufferAtr,
       scoreVersion: selected.scoreVersion,
       score: selected.score,
       scoreComponents: selected.scoreComponents,

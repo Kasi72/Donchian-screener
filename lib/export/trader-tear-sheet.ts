@@ -1,7 +1,7 @@
 import type { BuyRecommendation } from "@/lib/signals/scan-symbol";
 import { displayedGate, traderAssessmentFields } from "@/lib/signals/trader-assessment";
 
-export type TearSheetFormat = "word" | "pdf";
+export type TearSheetFormat = "word" | "pdf" | "pdf-compact";
 
 export interface TearSheetSection {
   title: string;
@@ -76,10 +76,13 @@ export function buildTearSheetSections(recommendation: BuyRecommendation): TearS
         ["Protective stop", money(recommendation.stop)],
         ["Target 1", money(recommendation.target1)],
         ["Target 2", money(recommendation.target2)],
+        ["Risk per share", money(recommendation.riskPerShare ?? recommendation.entry - recommendation.stop)],
+        ["Risk percentage", `${(recommendation.riskPercent ?? ((recommendation.entry - recommendation.stop) / recommendation.entry) * 100).toFixed(2)}%`],
         ["Target 1 reward/risk", ((recommendation.target1 - recommendation.entry) / (recommendation.entry - recommendation.stop)).toFixed(2)],
         ["Target 2 reward/risk", ((recommendation.target2 - recommendation.entry) / (recommendation.entry - recommendation.stop)).toFixed(2)],
         ["Room to reaction high (R)", recommendation.rewardRisk.toFixed(2)],
         ["Execution", "Next obtainable price; recalculate risk and reward after gaps. Reference prices are not guaranteed fills."],
+        ["Stop buffer", recommendation.stopBuffer === undefined ? "Unavailable" : `${money(recommendation.stopBuffer)} (${recommendation.stopBufferAtr?.toFixed(2) ?? "-"} ATR)`],
         ["Maximum holding period", `${diagnostics?.maximumHoldingCandles ?? 10} candles`],
       ],
     },
@@ -141,7 +144,7 @@ export function buildTearSheetSections(recommendation: BuyRecommendation): TearS
   ];
 }
 
-export function buildTearSheetHtml(recommendation: BuyRecommendation, title = "Donchian Reversal Screener") {
+export function buildTearSheetHtml(recommendation: BuyRecommendation, title = "Donchian Reversal Screener", compact = false) {
   const sections = buildTearSheetSections(recommendation);
   const sectionsHtml = sections.map((section) => `
     <section class="section">
@@ -152,13 +155,32 @@ export function buildTearSheetHtml(recommendation: BuyRecommendation, title = "D
   const state = recommendation.signalState ?? recommendation.sequentialEvidence?.state ?? "EARLIEST_CANDIDATE";
   const grade = recommendation.confirmation?.grade ?? "UNAVAILABLE";
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)} - ${escapeHtml(recommendation.symbol)}</title><style>
-    @page{size:Letter;margin:16mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#172538;background:#fff;margin:0;font-size:10pt;line-height:1.4}.masthead{border-bottom:3px solid #087f5b;padding-bottom:14px;margin-bottom:16px}.eyebrow{font-size:9pt;text-transform:uppercase;letter-spacing:.12em;font-weight:700;color:#087f5b;margin:0 0 5px}.title{font-size:23pt;font-weight:700;margin:0}.subtitle{color:#506176;margin:5px 0 0}.badges{margin-top:12px;display:flex;gap:7px;flex-wrap:wrap}.badge{display:inline-block;border:1px solid #a7b4c3;border-radius:14px;padding:4px 10px;font-size:9pt;font-weight:700}.buy{color:#087f5b;border-color:#087f5b}.state{color:#9b6b00}.grade{color:#087f5b}.section{break-inside:avoid;margin:0 0 15px}.section-head{display:flex;align-items:baseline;gap:10px;border-bottom:1px solid #d7dfe8;padding-bottom:5px;margin-bottom:8px}.section-head h2{font-size:13pt;margin:0}.section-head p{font-size:9pt;color:#627286;margin:0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 18px}.field{break-inside:avoid}.label{font-size:8.5pt;color:#627286}.value{font-size:10pt;font-weight:700;overflow-wrap:anywhere}.footer{border-top:1px solid #d7dfe8;color:#627286;font-size:8pt;padding-top:8px;margin-top:14px}.warning{background:#fff7df;border-left:3px solid #d69e00;padding:8px 10px;margin:10px 0;font-size:9pt}@media print{.section{break-inside:avoid}}
+    @page{size:Letter;margin:${compact ? "10mm" : "16mm"}}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#172538;background:#fff;margin:0;font-size:${compact ? "9pt" : "10pt"};line-height:1.4}.masthead{border-bottom:3px solid #087f5b;padding-bottom:${compact ? "9px" : "14px"};margin-bottom:${compact ? "10px" : "16px"}}.eyebrow{font-size:9pt;text-transform:uppercase;letter-spacing:.12em;font-weight:700;color:#087f5b;margin:0 0 5px}.title{font-size:${compact ? "19pt" : "23pt"};font-weight:700;margin:0}.subtitle{color:#506176;margin:5px 0 0}.badges{margin-top:8px;display:flex;gap:7px;flex-wrap:wrap}.badge{display:inline-block;border:1px solid #a7b4c3;border-radius:14px;padding:3px 8px;font-size:8pt;font-weight:700}.buy{color:#087f5b;border-color:#087f5b}.state{color:#9b6b00}.grade{color:#087f5b}.section{break-inside:avoid;margin:0 0 ${compact ? "10px" : "15px"}}.section-head{display:flex;align-items:baseline;gap:10px;border-bottom:1px solid #d7dfe8;padding-bottom:4px;margin-bottom:6px}.section-head h2{font-size:${compact ? "11pt" : "13pt"};margin:0}.section-head p{font-size:8pt;color:#627286;margin:0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:${compact ? "6px 14px" : "9px 18px"}}.field{break-inside:avoid}.label{font-size:8pt;color:#627286}.value{font-size:${compact ? "9pt" : "10pt"};font-weight:700;overflow-wrap:anywhere}.footer{border-top:1px solid #d7dfe8;color:#627286;font-size:8pt;padding-top:8px;margin-top:10px}.warning{background:#fff7df;border-left:3px solid #d69e00;padding:6px 8px;margin:8px 0;font-size:8pt}@media print{.section{break-inside:avoid}}
   </style></head><body><header class="masthead"><p class="eyebrow">${escapeHtml(title)}</p><h1 class="title">${escapeHtml(recommendation.symbol)} reversal setup</h1><p class="subtitle">Prepared from completed ${escapeHtml(recommendation.timeframe)} candles. Core Donchian rules remain the mandatory BUY gate.</p><div class="badges"><span class="badge buy">BUY</span><span class="badge state">${escapeHtml(state)}</span><span class="badge grade">${escapeHtml(grade)}</span></div></header>${sectionsHtml}<div class="warning">Probabilities and historical outcome metrics are shown only when a walk-forward calibration dataset is available. Uncalibrated evidence must not be interpreted as a win probability.</div><footer class="footer">Quantitative research output, not a guarantee or personalized investment advice. Generated ${escapeHtml(new Date().toLocaleString("en-IN"))}.${diagnostics ? ` Diagnostics version: ${escapeHtml(diagnostics.version)}.` : ""}</footer></body></html>`;
+}
+
+export function buildWhatsAppSummary(recommendation: BuyRecommendation): string {
+  const state = recommendation.signalTier?.replaceAll("_", " ") ?? recommendation.signalState?.replaceAll("_", " ") ?? "CANDIDATE";
+  const risk = recommendation.riskPerShare ?? recommendation.entry - recommendation.stop;
+  const riskPct = recommendation.riskPercent ?? (risk / recommendation.entry) * 100;
+  const t1R = recommendation.target1RewardRisk ?? (recommendation.target1 - recommendation.entry) / risk;
+  const t2R = recommendation.target2RewardRisk ?? (recommendation.target2 - recommendation.entry) / risk;
+  return [
+    `📈 *${recommendation.symbol} — ${state}*`,
+    `🟢 Signal: BUY | ${recommendation.timeframe}`,
+    `🎯 Entry: ${money(recommendation.entry)}`,
+    `🛡️ Stop: ${money(recommendation.stop)} (risk ${money(risk)} / ${riskPct.toFixed(2)}%)`,
+    `✅ Target 1: ${money(recommendation.target1)} (${t1R.toFixed(2)}R)`,
+    `🚀 Target 2: ${money(recommendation.target2)} (${t2R.toFixed(2)}R)`,
+    `📊 Donchian period: ${recommendation.autoPeriod} | Gate: PASS`,
+    `🕯️ Signal candle: ${date(recommendation.signalTime)}`,
+    `⚠️ Next obtainable price; recalculate risk after gaps. Not investment advice.`,
+  ].join("\n");
 }
 
 export function exportTraderTearSheet(recommendation: BuyRecommendation, format: TearSheetFormat): void {
   if (typeof window === "undefined" || typeof document === "undefined") return;
-  const html = buildTearSheetHtml(recommendation);
+  const html = buildTearSheetHtml(recommendation, "Donchian Reversal Screener", format === "pdf-compact");
   if (format === "word") {
     const blob = new Blob([html], { type: "application/msword" });
     const url = URL.createObjectURL(blob);

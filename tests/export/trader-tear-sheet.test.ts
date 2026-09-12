@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTearSheetHtml, buildTearSheetSections } from "@/lib/export/trader-tear-sheet";
+import { buildTearSheetHtml, buildTearSheetSections, buildWhatsAppSummary } from "@/lib/export/trader-tear-sheet";
 import type { BuyRecommendation } from "@/lib/signals/scan-symbol";
 
 const recommendation: BuyRecommendation = {
@@ -50,5 +50,13 @@ describe("trader tear sheet export", () => {
     expect(html).not.toContain("POWER<GRID>");
     expect(html).toContain("Not calibrated - evidence score only");
     expect(html).toContain("Uncalibrated evidence must not be interpreted as a win probability");
+  });
+
+  it("includes precise trade metrics in the WhatsApp-ready summary", () => {
+    const summary = buildWhatsAppSummary({ ...recommendation, riskPerShare: 5.6, riskPercent: 2.05 });
+    expect(summary).toContain("Entry: ₹273.40");
+    expect(summary).toContain("Stop: ₹267.80");
+    expect(summary).toContain("risk ₹5.60 / 2.05%");
+    expect(summary).toContain("Target 1: ₹281.80 (1.50R)");
   });
 });
