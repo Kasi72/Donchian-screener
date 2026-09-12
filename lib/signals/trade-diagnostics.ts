@@ -1,4 +1,4 @@
-import type { DailyCandleWindowAudit } from "@/lib/market/window-audit";
+import type { DailyCandleWindowAudit, IntradayCandleWindowAudit } from "@/lib/market/window-audit";
 import type { ReversalConfirmation } from "./reversal-confirmation";
 import type { SequentialEvidence } from "./sequential-evidence";
 import executionPolicy from "./execution-policy.json";
@@ -50,17 +50,23 @@ export function calculateTradeDiagnostics({
   sequential,
   rewardRisk,
   windowAudit,
+  intradayWindowAudit,
 }: {
   confirmation: ReversalConfirmation;
   sequential: SequentialEvidence;
   rewardRisk: number;
   windowAudit?: DailyCandleWindowAudit;
+  intradayWindowAudit?: IntradayCandleWindowAudit;
 }): TradeDiagnostics {
   const calibrated = sequential.calibratedProbability;
-  const dataQuality: DataQualityStatus = !windowAudit ? "NOT_AUDITED"
-    : windowAudit.complete && windowAudit.expectedSessions > 0 &&
-      windowAudit.observedSessions === windowAudit.expectedSessions && windowAudit.missingSessions === 0
-      ? "SESSION_WINDOW_COMPLETE" : "LIMITED";
+  const dailyComplete = windowAudit !== undefined && windowAudit.complete && windowAudit.expectedSessions > 0 &&
+    windowAudit.observedSessions === windowAudit.expectedSessions && windowAudit.missingSessions === 0;
+  const intradayComplete = intradayWindowAudit !== undefined && intradayWindowAudit.complete &&
+    intradayWindowAudit.expectedBars > 0 && intradayWindowAudit.observedBars === intradayWindowAudit.expectedBars &&
+    intradayWindowAudit.missingBars === 0;
+  const dataQuality: DataQualityStatus = dailyComplete || intradayComplete
+    ? "SESSION_WINDOW_COMPLETE"
+    : windowAudit !== undefined || intradayWindowAudit !== undefined ? "LIMITED" : "NOT_AUDITED";
   // Stock trend evidence cannot establish the wider market's regime.
   const marketRegime: MarketRegime = sequential.marketRegime === "TRENDING_BULL" ? "BULLISH"
     : sequential.marketRegime === "TRANSITION" ? "NEUTRAL_TO_BULLISH"
@@ -97,6 +103,9 @@ export function calculateTradeDiagnostics({
       "Probability is withheld until purged walk-forward triple-barrier outcomes are calibrated.",
       "Causal smoothing uses completed candles only; no centered filter is used.",
       "Uncertainty should be reported with conformal intervals and Bayesian shrinkage when a model is fitted.",
+      intradayWindowAudit
+        ? `Intraday continuity audit: ${intradayWindowAudit.observedBars}/${intradayWindowAudit.expectedBars} bars observed.`
+        : "Intraday continuity audit is not applicable to this timeframe.",
     ],
     // No calibrated, cost-adjusted outcome model is active in production.
     actionability: "STRUCTURAL_ONLY",

@@ -81,4 +81,15 @@ describe("calculateTradeDiagnostics", () => {
       expectedSessions: 10, observedSessions: 9, missingSessions: 0, complete: true,
     } }).dataQuality).toBe("LIMITED");
   });
+
+  it("uses the intraday continuity audit when no daily audit exists", () => {
+    const result = calculateTradeDiagnostics({
+      confirmation,
+      sequential,
+      rewardRisk: 2,
+      intradayWindowAudit: { expectedBars: 40, observedBars: 40, missingBars: 0, complete: true },
+    });
+    expect(result.dataQuality).toBe("SESSION_WINDOW_COMPLETE");
+    expect(result.validationNotes?.some((note) => note.includes("40/40 bars"))).toBe(true);
+  });
 });
