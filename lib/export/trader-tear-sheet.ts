@@ -115,6 +115,7 @@ export function buildTearSheetSections(recommendation: BuyRecommendation): TearS
         ["EMA fast / slow", sequential.movingAverages ? `${money(sequential.movingAverages.emaFast)} / ${money(sequential.movingAverages.emaSlow)}` : "Unavailable"],
         ["KAMA / T3", sequential.movingAverages ? `${money(sequential.movingAverages.kama)} / ${money(sequential.movingAverages.t3)}` : "Unavailable"],
         ["MA slope agreement", sequential.movingAverages ? `${[sequential.movingAverages.emaSlope, sequential.movingAverages.wmaSlope, sequential.movingAverages.kamaSlope, sequential.movingAverages.t3Slope].filter((value) => value > 0).length}/4 positive` : "Unavailable"],
+        ["Independent evidence groups", sequential.independentGroupCount === undefined ? "Unavailable" : `${sequential.independentGroupCount}/4 (${sequential.evidenceGroups?.join(", ") || "none"})`],
         ["Confirmation reasons", confirmation.reasons.join("; ")],
         ...(diagnostics?.validationNotes?.length ? [["Validation safeguards", diagnostics.validationNotes.join(" ")] as [string, string]] : []),
       ] : [["Status", "Confirmation evidence unavailable"]],

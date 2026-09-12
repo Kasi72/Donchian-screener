@@ -57,6 +57,10 @@ export function classifySignalTier(input: SignalTierInputs): SignalTierResult {
   if (input.sequential?.sgSlope !== undefined && input.sequential.sgSlope < 0) warnings.push("Smoothed price direction is still falling");
   if (data === "LIMITED" || data === "NOT_AUDITED") warnings.push("Data-quality audit is incomplete");
   if (input.rewardRisk < 1.5) warnings.push("Reward/risk is below the preferred 1.50 minimum");
+  const independentGroups = input.sequential?.independentGroupCount;
+  if (independentGroups !== undefined && independentGroups < 2) {
+    warnings.push("Fewer than two independent confirmation groups support the reversal");
+  }
   const strongEvidence = confirmation >= 75 && sequential >= 0.65 && trendScore >= 55 && input.rewardRisk >= 1.5 && dataReliable;
   const confirmedEvidence = confirmation >= 60 && sequential >= 0.45 && input.rewardRisk >= 1.5;
   const tier: SignalTier = strongEvidence ? "CONFIRMED_REVERSAL" : confirmedEvidence ? "DEVELOPING_REVERSAL" : "EARLY_CANDIDATE";

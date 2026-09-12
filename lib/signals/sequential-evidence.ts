@@ -35,6 +35,10 @@ export interface SequentialEvidence {
   traderSummary?: string;
   movingAverages?: MovingAverageEvidence;
   maEvidenceScore?: number;
+  /** Independent evidence groups with positive support at the completed candle. */
+  evidenceGroups?: string[];
+  /** Count of independent groups; correlated indicators are counted once. */
+  independentGroupCount?: number;
   /** Robust causal regime evidence; informational unless a validated model uses it. */
   marketRegime?: QuantMarketRegime;
   regimeTrendZ?: number;
@@ -226,6 +230,31 @@ function candleQuality(candle: Candle): number {
   return clamp(0.6 * closeLocation + 0.4 * clamp(lowerWick / 0.5));
 }
 
+function independentEvidenceGroups({
+  quality,
+  cusumScore,
+  changeProbability,
+  trendProbabilityValue,
+  persistenceScore,
+  sgSlope,
+  maScore,
+}: {
+  quality: number;
+  cusumScore: number;
+  changeProbability: number;
+  trendProbabilityValue: number;
+  persistenceScore: number;
+  sgSlope: number;
+  maScore: number;
+}): string[] {
+  const groups: string[] = [];
+  if (quality >= 0.6) groups.push("CANDLE_REJECTION");
+  if ((cusumScore + changeProbability) / 2 >= 0.6) groups.push("SEQUENTIAL_SHIFT");
+  if (trendProbabilityValue >= 0.55 && persistenceScore >= 0.5) groups.push("TREND_PERSISTENCE");
+  if (sgSlope >= 0 && maScore >= 0.5) groups.push("TREND_SMOOTHING");
+  return groups;
+}
+
 export function calculateSequentialEvidence(
   candles: Candle[],
   signalIndex: number,
@@ -244,6 +273,15 @@ export function calculateSequentialEvidence(
   const persistence = trendPersistence(values, trendProbabilityValue);
   const regime = classifyMarketRegime(candles, signalIndex, Math.min(LOOKBACK, signalIndex + 1));
   const maEvidence = calculateMovingAverageEvidence(candles, signalIndex, atrAt(candles, signalIndex, 14));
+  const evidenceGroups = independentEvidenceGroups({
+    quality,
+    cusumScore,
+    changeProbability,
+    trendProbabilityValue,
+    persistenceScore: persistence.score,
+    sgSlope,
+    maScore: maEvidence.score,
+  });
   const reversalProbability = clamp(
     0.32 * cusumScore +
       0.28 * changeProbability +
@@ -277,5 +315,7 @@ export function calculateSequentialEvidence(
     regimeVolatilityPercentile: regime.volatilityPercentile,
     movingAverages: maEvidence,
     maEvidenceScore: maEvidence.score,
+    evidenceGroups,
+    independentGroupCount: evidenceGroups.length,
   };
 }
