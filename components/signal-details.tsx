@@ -39,6 +39,16 @@ function DetailGrid({ fields }: { fields: DetailField[] }) {
   );
 }
 
+function DetailGroup({ title, fields }: { title: string; fields: DetailField[] }) {
+  if (fields.length === 0) return null;
+  return (
+    <div className="details-subgroup">
+      <h4>{title}</h4>
+      <DetailGrid fields={fields} />
+    </div>
+  );
+}
+
 function DetailSection({
   title,
   description,
@@ -220,6 +230,15 @@ export function SignalDetails({
     ["Median MAE / MFE", diagnostics?.medianMae === null || diagnostics?.medianMfe === null || diagnostics === undefined ? "Pending — requires completed triple-barrier outcomes" : `${formatPrice(diagnostics.medianMae)} / ${formatPrice(diagnostics.medianMfe)}`, diagnostics?.medianMae === null || diagnostics?.medianMfe === null || diagnostics === undefined ? "detail-value--pending" : undefined],
   ];
 
+  const pickDecisionFields = (labels: string[]) => decisionFields.filter(([label]) => labels.includes(label));
+  const verdictFields = pickDecisionFields([
+    "Signal state", "Reversal confirmation", "Reversal probability", "95% confidence interval", "Target 1 before stop", "Evidence quality score",
+  ]);
+  const readinessFields = pickDecisionFields([
+    "Trade tier", "Tier score", "Entry readiness", "Trade quality score", "Actionability",
+  ]);
+  const interpretationFields = pickDecisionFields(["Evidence interpretation", "Conflicting evidence", "Prediction readiness", "What a future probability will mean", "Trade discipline", "Tier rationale", "Tier warnings", "Trader read"]);
+
   return (
     <tr className="details-row">
       <td colSpan={12}>
@@ -264,8 +283,12 @@ export function SignalDetails({
               {exportError ? <p className="details-export-error" role="alert">{exportError}</p> : null}
             </div>
           </header>
-          <DetailSection title="Decision" description="The plain-language answer and confidence status.">
-            <DetailGrid fields={decisionFields} />
+          <DetailSection title="Decision" description="Start here: identify the setup, judge the evidence, then check whether the trade is actionable.">
+            <div className="details-subgroups">
+              <DetailGroup title="Signal verdict" fields={verdictFields} />
+              <DetailGroup title="Trade readiness" fields={readinessFields} />
+              <DetailGroup title="Trader interpretation" fields={interpretationFields} />
+            </div>
           </DetailSection>
           <DetailSection title="Trade plan" description="Prices and risk levels derived from the completed signal candle.">
             <DetailGrid fields={tradeFields} />
