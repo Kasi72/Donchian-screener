@@ -9,6 +9,8 @@ export interface RunScanOptions {
   now?: Date;
   signal?: AbortSignal;
   itemTimeoutMs?: number;
+  includeMarketContext?: boolean;
+  benchmarkSymbol?: string;
 }
 
 function abortReason(signal: AbortSignal): unknown {
@@ -34,6 +36,24 @@ export async function runScan(
     Math.floor(options.itemTimeoutMs ?? DEFAULT_ITEM_TIMEOUT_MS),
   );
   let nextIndex = 0;
+  const benchmarkSymbol = options.benchmarkSymbol ?? "^NSEI";
+  let benchmarkResponse: Awaited<ReturnType<MarketDataProvider["getCandles"]>> | undefined;
+  let benchmarkCandles: Awaited<ReturnType<MarketDataProvider["getCandles"]>>["candles"] | undefined;
+  if (options.includeMarketContext && !options.signal?.aborted) {
+    try {
+      const benchmark = await provider.getCandles(benchmarkSymbol, timeframe, options.now, {
+        signal: options.signal,
+        deadlineMs: Date.now() + itemTimeoutMs,
+      });
+      if (benchmark.status === "OK") {
+        benchmarkResponse = benchmark;
+        benchmarkCandles = benchmark.candles;
+      }
+    } catch {
+      // Market context is deliberately non-gating. The per-symbol scan remains
+      // available and labels the context as unavailable.
+    }
+  }
 
   async function scanOne(instrument: UniverseInstrument): Promise<ScanItemResult> {
     if (options.signal?.aborted) throw abortReason(options.signal);
@@ -47,10 +67,14 @@ export async function runScan(
     );
 
     try {
-      return await scanSymbol(instrument, timeframe, provider, {
+      const symbolProvider = benchmarkResponse && instrument.symbol.trim().toUpperCase() === benchmarkSymbol
+        ? { getCandles: async () => benchmarkResponse! }
+        : provider;
+      return await scanSymbol(instrument, timeframe, symbolProvider, {
         now: options.now,
         signal: controller.signal,
         deadlineMs,
+        ...(benchmarkCandles ? { benchmarkCandles, benchmarkSymbol } : {}),
       });
     } finally {
       clearTimeout(timeout);

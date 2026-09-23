@@ -7,6 +7,7 @@ import {
   YahooProviderError,
   type YahooChartClient,
 } from "@/lib/market/yahoo-provider";
+import type { YahooCandle } from "@/lib/market/normalize-candles";
 import {
   BoundedCandleCache,
   GlobalRequestThrottle,
@@ -34,7 +35,7 @@ function completedQuotes() {
     .slice(-100);
 }
 
-function clientReturning(quotes: ReturnType<typeof completedQuotes>): YahooChartClient {
+function clientReturning(quotes: YahooCandle[]): YahooChartClient {
   return {
     chart: vi.fn().mockResolvedValue({ quotes }),
   };
@@ -59,6 +60,35 @@ describe("YahooMarketDataProvider", () => {
         fetchOptions: expect.objectContaining({ signal: expect.any(AbortSignal) }),
       }),
     );
+  });
+
+  it("reconstructs completed weekly candles from daily OHLCV instead of trusting provider aggregates", async () => {
+    const dates = ["03", "04", "05", "06", "07", "10"];
+    const quotes = dates.map((day, index) => ({
+      date: new Date(`2026-08-${day}T09:15:00${IST}`),
+      open: 100 + index,
+      high: 105 + index,
+      low: 99 - index,
+      close: 103 + index,
+      volume: 1_000 + index,
+    }));
+    const client = clientReturning(quotes);
+    const provider = new YahooMarketDataProvider({ client, maxAttempts: 1 });
+
+    const result = await provider.getCandles("RELIANCE.NS", "1wk", new Date(`2026-08-10T12:00:00${IST}`));
+
+    expect(client.chart).toHaveBeenCalledWith(
+      "RELIANCE.NS",
+      expect.objectContaining({ interval: "1d" }),
+      expect.anything(),
+    );
+    expect(result.candles).toEqual([expect.objectContaining({
+      open: 100,
+      high: 109,
+      low: 95,
+      close: 107,
+      volume: 5_010,
+    })]);
   });
 
   it("retries a transient Yahoo rate-limit response before returning normalized candles", async () => {

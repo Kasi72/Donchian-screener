@@ -155,7 +155,7 @@ describe("ScanResults", () => {
             ...recommendation,
             signalState: "EARLIEST_CANDIDATE",
             sequentialEvidence: {
-              version: "sequential-v1",
+              version: "sequential-v2",
               cusumScore: 0.4,
               changePointProbability: 0.4,
               trendProbability: 0.4,
@@ -208,7 +208,7 @@ describe("ScanResults", () => {
             ...recommendation,
             signalState: "CONFIRMED_REVERSAL",
             sequentialEvidence: {
-              version: "sequential-v1",
+              version: "sequential-v2",
               cusumScore: 0.9,
               changePointProbability: 0.9,
               trendProbability: 0.9,

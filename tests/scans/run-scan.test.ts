@@ -139,7 +139,7 @@ describe("scanSymbol", () => {
     expect(result.recommendation?.confirmation?.version).toBe("confirmation-v2");
     expect(result.recommendation?.confirmation?.grade).toBe("CONFIRMED");
     expect(result.recommendation?.signalState).toMatch(/EARLIEST_CANDIDATE|EVIDENCE_SUPPORTED/);
-    expect(result.recommendation?.sequentialEvidence?.version).toBe("sequential-v1");
+    expect(result.recommendation?.sequentialEvidence?.version).toBe("sequential-v2");
     expect(result.recommendation?.signalLow).toBe(95.02);
     expect(result.recommendation?.signalClose).toBe(102);
     expect(result.recommendation?.signalLowTick).toBe(1900);
@@ -163,6 +163,22 @@ describe("scanSymbol", () => {
     );
 
     expect(result).toEqual({ symbol: "FLAT", status: "NO_SIGNAL" });
+  });
+
+  it("reports an incomplete dependency window as a data-quality limitation, not NO_SIGNAL", async () => {
+    const candles = buyFixture().map((item, index) => ({
+      ...item,
+      time: (index + (index >= 95 ? 1 : 0)) * 15 * 60_000,
+    }));
+
+    const result = await scanSymbol(
+      instrument("MISSING-BAR"),
+      "15m",
+      providerReturning(completed(candles)),
+    );
+
+    expect(result.status).toBe("DATA_QUALITY_LIMITATION");
+    expect(result.message).toContain("dependency window");
   });
 
   it("rejects a rollover when the signal close is not above its low", async () => {
@@ -636,7 +652,7 @@ describe("scan JSON endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(yahooRequests).toEqual(["RELIANCE.NS"]);
+    expect(yahooRequests).toEqual(["^NSEI", "RELIANCE.NS"]);
   });
 
   it.each(["^NSEI", "^NSEBANK", "^CRSLDX", "^INDIAVIX"])(
@@ -655,7 +671,7 @@ describe("scan JSON endpoint", () => {
       );
 
       expect(response.status).toBe(200);
-      expect(yahooRequests).toEqual([symbol]);
+      expect(yahooRequests).toEqual(symbol === "^NSEI" ? ["^NSEI"] : ["^NSEI", symbol]);
     },
   );
 
@@ -676,7 +692,7 @@ describe("scan JSON endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(yahooRequests).toEqual(["RELIANCE.NS"]);
+    expect(yahooRequests).toEqual(["^NSEI", "RELIANCE.NS"]);
     await expect(response.json()).resolves.toMatchObject({ results: [{ symbol: "RELIANCE" }] });
   });
 

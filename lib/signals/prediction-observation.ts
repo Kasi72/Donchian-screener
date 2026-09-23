@@ -3,8 +3,8 @@ import type { BuyRecommendation } from "./scan-symbol";
 import { atrAt } from "./atr";
 import { evaluateTradeOutcome, type ExecutionOptions } from "./trade-outcome";
 
-export const FEATURE_VERSION = "signal-close-features-v1";
-export const LABEL_VERSION = "joint-outcomes-v1";
+export const FEATURE_VERSION = "signal-close-features-v2";
+export const LABEL_VERSION = "joint-outcomes-v2";
 
 /** Fixed, compact feature list. No subsequent open, outcome or future pivot enters X. */
 export function signalCloseFeatures(candles: readonly Candle[], index: number, r: BuyRecommendation) {
@@ -24,7 +24,18 @@ export function signalCloseFeatures(candles: readonly Candle[], index: number, r
     declineBars,
     volumeZ: r.confirmation?.volumeZScore ?? null,
     stopAtr: atr > 0 ? (r.entry - r.stop) / atr : null,
-    resistanceAtr: atr > 0 ? (r.reactionHigh - c.close) / atr : null,
+    resistanceAtr: atr > 0 && r.reactionHigh !== null ? (r.reactionHigh - c.close) / atr : null,
+    bayesianShortRun: r.sequentialEvidence?.bayesianChangePoint?.shortRunProbability ?? null,
+    bayesianBullishChange: r.sequentialEvidence?.bayesianChangePoint?.bullishChangeEvidence ?? null,
+    stateSlope: r.sequentialEvidence?.stateSpaceTrend?.slope ?? null,
+    stateSlopeProbability: r.sequentialEvidence?.stateSpaceTrend?.slopePositiveProbability ?? null,
+    stateFlipProbability: r.sequentialEvidence?.stateSpaceTrend?.flipProbability ?? null,
+    sgSlopeAgreement: r.sequentialEvidence?.sgPositiveSlopeAgreement ?? null,
+    sgCurvatureAgreement: r.sequentialEvidence?.sgPositiveCurvatureAgreement ?? null,
+    sgStability: r.sequentialEvidence?.sgStabilityScore ?? null,
+    atrNormalizedSlope: r.sequentialEvidence?.atrNormalizedSlope ?? null,
+    relativeStrengthZ: r.sequentialEvidence?.context?.relativeStrengthZ ?? null,
+    higherTimeframeReturn: r.sequentialEvidence?.context?.higherTimeframeReturn ?? null,
   };
 }
 
@@ -49,6 +60,12 @@ export function predictionObservation(
   const jointOutcome = !complete ? null : t1.outcome === "GAP_SKIP" ? "SKIP"
     : t1.outcome === "STOP" ? "STOP" : t1.outcome === "EXPIRED" ? "EXPIRED"
       : t2.outcome === "TARGET2" ? "T2" : "T1_ONLY";
+  const competingRisk = !complete ? { event: "CENSORED" as const, time: null }
+    : jointOutcome === "STOP" ? { event: "STOP" as const, time: t1.barsHeld }
+      : jointOutcome === "T2" ? { event: "TARGET2" as const, time: t2.barsHeld }
+        : jointOutcome === "T1_ONLY" ? { event: "TARGET1" as const, time: t1.barsHeld }
+          : jointOutcome === "SKIP" ? { event: "SKIP" as const, time: 0 }
+            : { event: "EXPIRY" as const, time: horizon };
   const swingHigh = latestKnownSwingHigh(candles, index);
   let flipDelay: number | null = null;
   for (let j = index + 2; j <= Math.min(index + horizon, candles.length - 1); j++) {
@@ -63,7 +80,7 @@ export function predictionObservation(
     labelEndTime: complete ? candles[index + horizon].time : null,
     features: signalCloseFeatures(candles, index, r),
     evidenceQualityScore: r.tradeDiagnostics?.evidenceQualityScore ?? null,
-    jointOutcome, target1: t1, target2: t2, optimisticTarget1: optimistic,
+    jointOutcome, competingRisk, target1: t1, target2: t2, optimisticTarget1: optimistic,
     structuralFlip: complete && swingHigh !== null ? flipDelay !== null : null,
     structuralFlipDelay: flipDelay, knownSwingHigh: swingHigh,
     labelMeaning: "T1/T2 before stop within horizon; flip requires two future closes above a swing high known at signal close",

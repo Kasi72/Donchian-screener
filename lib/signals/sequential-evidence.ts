@@ -1,10 +1,14 @@
 import type { Candle } from "@/lib/market/provider";
-import { applyPlattCalibration, type PlattCalibrationModel } from "./calibration";
+import { applyCalibration, type CalibrationModel } from "./calibration";
 import { classifyMarketRegime, type QuantMarketRegime } from "./market-regime";
 import { calculateMovingAverageEvidence, type MovingAverageEvidence } from "./moving-averages";
 import { atrAt } from "./atr";
+import { bayesianOnlineChangePoint, type BayesianChangePointEvidence } from "./bayesian-change-point";
+import { estimateStateSpaceTrend, type StateSpaceTrendEvidence } from "./state-space-trend";
+import { calculateContextualEvidence, type ContextualEvidence } from "./contextual-evidence";
+import type { Timeframe } from "@/lib/market/provider";
 
-export const SEQUENTIAL_EVIDENCE_VERSION = "sequential-v1" as const;
+export const SEQUENTIAL_EVIDENCE_VERSION = "sequential-v2" as const;
 
 export type ReversalState = "EARLIEST_CANDIDATE" | "EVIDENCE_SUPPORTED" | "CONFIRMED_REVERSAL";
 export type TrendState = "REVERSAL_CANDIDATE" | "DEVELOPING_FLIP" | "TREND_EVIDENCE_SUPPORTED" | "CONFIRMED_FLIP";
@@ -17,7 +21,7 @@ export interface SequentialEvidence {
   candleQuality: number;
   /** Bounded evidence score; not a calibrated probability by itself. */
   reversalScore: number;
-  calibration: "UNCALIBRATED" | "PLATT";
+  calibration: "UNCALIBRATED" | "PLATT" | "BETA";
   calibratedProbability: number | null;
   state: ReversalState;
   sampleSize: number;
@@ -43,6 +47,16 @@ export interface SequentialEvidence {
   marketRegime?: QuantMarketRegime;
   regimeTrendZ?: number;
   regimeVolatilityPercentile?: number;
+  /** Exact online run-length evidence; never an outcome probability. */
+  bayesianChangePoint?: BayesianChangePointEvidence;
+  /** Robust causal local-linear-trend state and uncertainty. */
+  stateSpaceTrend?: StateSpaceTrendEvidence;
+  sgWindows?: Array<{ window: number; slope: number; curvature: number }>;
+  sgPositiveSlopeAgreement?: number;
+  sgPositiveCurvatureAgreement?: number;
+  sgStabilityScore?: number;
+  atrNormalizedSlope?: number;
+  context?: ContextualEvidence;
 }
 
 const EPSILON = 1e-9;
@@ -164,8 +178,8 @@ function solve3(matrix: number[][], vector: number[]): number[] {
   return [a[0][3], a[1][3], a[2][3]];
 }
 
-function causalSavitzkyGolay(candles: Candle[], signalIndex: number): { slope: number; curvature: number } {
-  const start = Math.max(0, signalIndex - SG_WINDOW + 1);
+function causalSavitzkyGolay(candles: Candle[], signalIndex: number, window = SG_WINDOW): { slope: number; curvature: number } {
+  const start = Math.max(0, signalIndex - window + 1);
   const observations = candles.slice(start, signalIndex + 1).map((candle, index) => ({
     x: index - (signalIndex - start),
     y: Math.log(Math.max(candle.close, EPSILON)),
@@ -238,6 +252,8 @@ function independentEvidenceGroups({
   persistenceScore,
   sgSlope,
   maScore,
+  bayesianChangeEvidence,
+  stateSpaceSlopeProbability,
 }: {
   quality: number;
   cusumScore: number;
@@ -246,19 +262,26 @@ function independentEvidenceGroups({
   persistenceScore: number;
   sgSlope: number;
   maScore: number;
+  bayesianChangeEvidence: number;
+  stateSpaceSlopeProbability: number;
 }): string[] {
   const groups: string[] = [];
   if (quality >= 0.6) groups.push("CANDLE_REJECTION");
-  if ((cusumScore + changeProbability) / 2 >= 0.6) groups.push("SEQUENTIAL_SHIFT");
-  if (trendProbabilityValue >= 0.55 && persistenceScore >= 0.5) groups.push("TREND_PERSISTENCE");
-  if (sgSlope >= 0 && maScore >= 0.5) groups.push("TREND_SMOOTHING");
+  if ((cusumScore + changeProbability + bayesianChangeEvidence) / 3 >= 0.6) groups.push("SEQUENTIAL_SHIFT");
+  const trendVotes = [
+    trendProbabilityValue >= 0.55 && persistenceScore >= 0.5,
+    stateSpaceSlopeProbability >= 0.5,
+    sgSlope >= 0 && maScore >= 0.5,
+  ].filter(Boolean).length;
+  if (trendVotes >= 2) groups.push("TREND_DIRECTION");
   return groups;
 }
 
 export function calculateSequentialEvidence(
   candles: Candle[],
   signalIndex: number,
-  calibrationModel?: PlattCalibrationModel,
+  calibrationModel?: CalibrationModel,
+  contextOptions?: { timeframe: Timeframe; benchmarkCandles?: readonly Candle[]; benchmarkSymbol?: string },
 ): SequentialEvidence {
   if (!Number.isInteger(signalIndex) || signalIndex < MIN_HISTORY || signalIndex >= candles.length) {
     throw new RangeError("Sequential evidence requires a completed candle with sufficient history");
@@ -268,11 +291,28 @@ export function calculateSequentialEvidence(
   const changeProbability = changePointProbability(values);
   const trendProbabilityValue = trendProbability(values);
   const quality = candleQuality(candles[signalIndex]);
-  const { slope: sgSlope, curvature: sgCurvature } = causalSavitzkyGolay(candles, signalIndex);
+  const sgWindows = [5, 7, 11].filter((window) => signalIndex + 1 >= window).map((window) => ({
+    window,
+    ...causalSavitzkyGolay(candles, signalIndex, window),
+  }));
+  const primarySg = sgWindows.find(({ window }) => window === SG_WINDOW) ?? sgWindows.at(-1)!;
+  const { slope: sgSlope, curvature: sgCurvature } = primarySg;
+  const sgPositiveSlopeAgreement = sgWindows.filter(({ slope }) => slope > 0).length / sgWindows.length;
+  const sgPositiveCurvatureAgreement = sgWindows.filter(({ curvature }) => curvature > 0).length / sgWindows.length;
+  const sgStabilityScore = clamp(0.6 * Math.max(sgPositiveSlopeAgreement, 1 - sgPositiveSlopeAgreement) +
+    0.4 * Math.max(sgPositiveCurvatureAgreement, 1 - sgPositiveCurvatureAgreement));
+  const signalAtr = atrAt(candles, signalIndex, 14);
+  const atrNormalizedSlope = sgSlope / Math.max(signalAtr / candles[signalIndex].close, EPSILON);
   const overlay = additionalOverlay(values, sgSlope, sgCurvature);
   const persistence = trendPersistence(values, trendProbabilityValue);
   const regime = classifyMarketRegime(candles, signalIndex, Math.min(LOOKBACK, signalIndex + 1));
   const maEvidence = calculateMovingAverageEvidence(candles, signalIndex, atrAt(candles, signalIndex, 14));
+  const bayesianChangePoint = bayesianOnlineChangePoint(values);
+  const logPrices = candles.slice(Math.max(0, signalIndex - LOOKBACK + 1), signalIndex + 1).map((candle) => Math.log(Math.max(candle.close, EPSILON)));
+  const stateSpaceTrend = estimateStateSpaceTrend(logPrices);
+  const context = contextOptions
+    ? calculateContextualEvidence(candles, signalIndex, contextOptions.timeframe, contextOptions.benchmarkCandles, contextOptions.benchmarkSymbol)
+    : undefined;
   const evidenceGroups = independentEvidenceGroups({
     quality,
     cusumScore,
@@ -281,15 +321,19 @@ export function calculateSequentialEvidence(
     persistenceScore: persistence.score,
     sgSlope,
     maScore: maEvidence.score,
+    bayesianChangeEvidence: bayesianChangePoint.bullishChangeEvidence,
+    stateSpaceSlopeProbability: stateSpaceTrend.slopePositiveProbability,
   });
   const reversalProbability = clamp(
-    0.32 * cusumScore +
-      0.28 * changeProbability +
-      0.22 * trendProbabilityValue +
-      0.18 * quality,
+    0.24 * cusumScore +
+      0.18 * changeProbability +
+      0.18 * bayesianChangePoint.bullishChangeEvidence +
+      0.18 * stateSpaceTrend.slopePositiveProbability +
+      0.12 * trendProbabilityValue +
+      0.10 * quality,
   );
   const calibratedProbability = calibrationModel
-    ? applyPlattCalibration(calibrationModel, reversalProbability)
+    ? applyCalibration(calibrationModel, reversalProbability)
     : null;
   return {
     version: SEQUENTIAL_EVIDENCE_VERSION,
@@ -298,7 +342,7 @@ export function calculateSequentialEvidence(
     trendProbability: trendProbabilityValue,
     candleQuality: quality,
     reversalScore: reversalProbability,
-    calibration: calibrationModel ? "PLATT" : "UNCALIBRATED",
+    calibration: calibrationModel ? (calibrationModel.version === "platt-v1" ? "PLATT" : "BETA") : "UNCALIBRATED",
     calibratedProbability,
     // Same-candle evidence does not establish subsequent price follow-through.
     state: reversalProbability >= 0.65 ? "EVIDENCE_SUPPORTED" : "EARLIEST_CANDIDATE",
@@ -317,5 +361,13 @@ export function calculateSequentialEvidence(
     maEvidenceScore: maEvidence.score,
     evidenceGroups,
     independentGroupCount: evidenceGroups.length,
+    bayesianChangePoint,
+    stateSpaceTrend,
+    sgWindows,
+    sgPositiveSlopeAgreement,
+    sgPositiveCurvatureAgreement,
+    sgStabilityScore,
+    atrNormalizedSlope,
+    ...(context ? { context } : {}),
   };
 }

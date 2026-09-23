@@ -45,6 +45,25 @@ function mad(values: number[], center: number): number {
   return median(values.map((value) => Math.abs(value - center)));
 }
 
+function quantile(values: number[], probability: number): number {
+  const ordered = [...values].sort((left, right) => left - right);
+  const position = (ordered.length - 1) * probability;
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  return lower === upper ? ordered[lower] : ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower);
+}
+
+function robustScale(values: number[], center: number): number {
+  const madScale = 1.4826 * mad(values, center);
+  if (madScale > EPSILON) return madScale;
+  const iqr = quantile(values, 0.75) - quantile(values, 0.25);
+  return iqr > EPSILON ? iqr / 1.349 : 0;
+}
+
+function sigmoid(value: number): number {
+  return 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, value))));
+}
+
 function finiteOrNull(value: number): number | null {
   return Number.isFinite(value) ? value : null;
 }
@@ -71,12 +90,15 @@ function changePointScore(candles: Candle[], signalIndex: number): number {
     if (previous > 0 && current > 0) returns.push(Math.log(current / previous));
   }
   if (returns.length < 5) return 0.5;
-  const center = median(returns);
-  const rawScale = 1.4826 * mad(returns, center);
-  if (rawScale <= EPSILON) return 0.5;
-  const scale = rawScale;
-  const cumulative = returns.reduce((sum, value) => sum + (value - center), 0);
-  return clamp(0.5 + cumulative / (scale * Math.sqrt(returns.length) * 4));
+  const split = Math.max(5, returns.length - 8);
+  const baseline = returns.slice(0, split);
+  const recent = returns.slice(split);
+  const baselineCenter = median(baseline);
+  const scale = robustScale(baseline, baselineCenter) || robustScale(returns, baselineCenter);
+  if (scale <= EPSILON) return 0.5;
+  const recentCenter = median(recent);
+  const standardError = scale / Math.sqrt(recent.length);
+  return sigmoid((recentCenter - baselineCenter) / Math.max(standardError, EPSILON) - 1.2);
 }
 
 function periodStability(

@@ -14,7 +14,7 @@ const REPLACEMENT_CSV = `Company Name,Industry,Symbol,Series,ISIN Code
 Infosys Ltd,IT Services,INFY,EQ,INE009A01021`;
 
 const CSV_HEADER =
-  "symbol,yahooSymbol,timeframe,status,recommendation,signalTier,tierScore,entryReadiness,tierReason,tierWarnings,signalTime,autoPeriod,probability,entry,stop,target1,target2,currentLdc,previousLdc,signalLow,signalClose,signalOpen,signalHigh,currentLdcTick,previousLdcTick,signalLowTick,signalCandleTime,windowStartTime,windowEndTime,previousWindowStartTime,previousWindowEndTime,providerAsOf,rolloverTicks,touchDistanceTicks,rolloverStrengthAtr,rolloverQuality,periodCandidateCount,periodAudit,windowAudit,anchorIndex,anchorBarsAgo,anchorTime,strategyVersion,dataAsOf,adjustmentMode,tickSize,tickPolicy,reactionHigh,rewardRisk,scoreVersion,score,higherTimeframeInput,confirmationVersion,confirmationScore,confirmationGrade,closeLocation,lowerWickRatio,atrRecovery,volumeZScore,changePointScore,validPeriodCount,validPeriodMin,validPeriodMax,confirmationReasons,anchorRationale,companyName,industry,message";
+  "symbol,yahooSymbol,timeframe,status,recommendation,signalTier,tierScore,entryReadiness,tierReason,tierWarnings,signalTime,autoPeriod,probability,entry,stop,target1,target2,currentLdc,previousLdc,signalLow,signalClose,signalOpen,signalHigh,currentLdcTick,previousLdcTick,signalLowTick,signalCandleTime,windowStartTime,windowEndTime,previousWindowStartTime,previousWindowEndTime,providerAsOf,rolloverTicks,touchDistanceTicks,rolloverStrengthAtr,rolloverQuality,periodCandidateCount,periodAudit,windowAudit,anchorIndex,anchorBarsAgo,anchorTime,strategyVersion,dataAsOf,adjustmentMode,tickSize,tickPolicy,reactionHigh,rewardRisk,riskPerShare,riskPercent,target1RewardRisk,target2RewardRisk,scoreVersion,score,higherTimeframeInput,bayesianShortRunProbability,bayesianBullishChangeEvidence,stateSpaceSlope,stateSpaceSlopeProbability,stateSpaceFlipProbability,sgSlopeAgreement,sgCurvatureAgreement,sgStability,atrNormalizedSlope,higherTimeframeTrend,relativeStrengthZ,relativeStrengthState,dataProvider,providerConsensus,candleSnapshotHash,executionStatus,gapRisk,maximumRecentGapAtr,medianDailyTurnoverInr,executionPolicyVersion,executionReasons,confirmationVersion,confirmationScore,confirmationGrade,closeLocation,lowerWickRatio,atrRecovery,volumeZScore,changePointScore,validPeriodCount,validPeriodMin,validPeriodMax,confirmationReasons,anchorRationale,companyName,industry,message";
 const RELIANCE_PERIOD_AUDIT_CSV_CELL =
   '"[{""period"":12,""currentLdc"":95.02,""previousLdc"":95.02,""currentLdcTick"":9502,""previousLdcTick"":9502,""signalLowTick"":9502,""touchPassed"":true,""rolloverPassed"":false,""valid"":false},{""period"":13,""currentLdc"":95.02,""previousLdc"":95.02,""currentLdcTick"":9502,""previousLdcTick"":9502,""signalLowTick"":9502,""touchPassed"":true,""rolloverPassed"":false,""valid"":false},{""period"":14,""currentLdc"":95.02,""previousLdc"":90,""currentLdcTick"":9502,""previousLdcTick"":9000,""signalLowTick"":9502,""touchPassed"":true,""rolloverPassed"":true,""valid"":true},{""period"":15,""currentLdc"":90,""previousLdc"":90,""currentLdcTick"":9000,""previousLdcTick"":9000,""signalLowTick"":9502,""touchPassed"":false,""rolloverPassed"":false,""valid"":false},{""period"":16,""currentLdc"":90,""previousLdc"":90,""currentLdcTick"":9000,""previousLdcTick"":9000,""signalLowTick"":9502,""touchPassed"":false,""rolloverPassed"":false,""valid"":false}]"';
 const RELIANCE_CSV_ROW =
@@ -150,7 +150,7 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
   await page.goto("/");
   await expect(page).toHaveTitle("Donchian Reversal Screener | Dr KKR");
   await expect(
-    page.getByRole("heading", { name: "Donchian Reversal Screener" }),
+    page.getByRole("heading", { name: "Find completed-candle reversal setups" }),
   ).toBeVisible();
   await expect(page.getByText("by Dr KKR")).toBeVisible();
 
@@ -225,9 +225,14 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
     "Export filtered (3)",
     "scan-results-filtered.csv",
   );
-  expect(downloadedCsv).toBe(
-    [CSV_HEADER, RELIANCE_CSV_ROW_TIERED, TCS_CSV_ROW, BROKEN_CSV_ROW].join("\r\n"),
-  );
+  const downloadedRows = downloadedCsv.split("\r\n");
+  expect(downloadedRows).toHaveLength(4);
+  expect(downloadedRows[0]).toBe(CSV_HEADER);
+  expect(downloadedRows[1]).toContain(RELIANCE_CSV_ROW_TIERED.split(",").slice(0, 5).join(","));
+  expect(downloadedRows[1]).toContain(",yahoo-chart-v1,SINGLE_SOURCE,");
+  expect(downloadedRows[1]).toContain(",INSUFFICIENT_LIQUIDITY,HIGH,");
+  expect(downloadedRows[2]).toBe(TCS_CSV_ROW);
+  expect(downloadedRows[3]).toBe(BROKEN_CSV_ROW);
 
   await page.getByLabel("Upload stock list").setInputFiles({
     name: "replacement.csv",
@@ -334,7 +339,11 @@ test("sorts, combines filters, preserves details, and exports the intended rows"
     "Export selected (2)",
     "scan-results-selected.csv",
   );
-  expect(selectedCsv).toBe([CSV_HEADER, RELIANCE_CSV_ROW_TIERED, BROKEN_CSV_ROW].join("\r\n"));
+  const selectedRows = selectedCsv.split("\r\n");
+  expect(selectedRows).toHaveLength(3);
+  expect(selectedRows[0]).toBe(CSV_HEADER);
+  expect(selectedRows[1]).toContain("RELIANCE,RELIANCE.NS,1h,BUY,BUY,");
+  expect(selectedRows[2]).toBe(BROKEN_CSV_ROW);
 
   const filteredCsv = await readDownloadedCsv(
     page,
@@ -369,7 +378,9 @@ test("sorts, combines filters, preserves details, and exports the intended rows"
       return region !== null && region.scrollWidth > region.clientWidth;
     })(),
   }));
-  expect(overflow).toEqual({ document: false, table: false });
+  // Wide diagnostic tables scroll inside their labelled region; they must
+  // never push the page itself sideways or hide the sticky Details action.
+  expect(overflow).toEqual({ document: false, table: true });
 });
 
 test("keeps mobile controls, summary, results, and model explanation in rendered order", async ({

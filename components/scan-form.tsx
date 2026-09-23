@@ -207,7 +207,7 @@ function isBuyRecommendation(value: unknown, symbol: string): boolean {
     value.scoreVersion === "structural-v1" &&
     isFiniteNumber(value.score) &&
     hasFiniteScoreComponents(value.scoreComponents) &&
-    value.higherTimeframeInput === "NEUTRAL_UNAVAILABLE" &&
+    ["BULLISH", "BEARISH", "NEUTRAL", "NEUTRAL_UNAVAILABLE"].includes(value.higherTimeframeInput as string) &&
     typeof value.anchorRationale === "string" &&
     (value.confirmation === undefined || isReversalConfirmation(value.confirmation)) &&
     (value.tradeDiagnostics === undefined || isTradeDiagnostics(value.tradeDiagnostics)) &&

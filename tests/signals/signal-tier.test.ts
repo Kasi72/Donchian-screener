@@ -3,7 +3,10 @@ import { classifySignalTier, tierLabel } from "@/lib/signals/signal-tier";
 
 const base = {
   confirmation: { score: 80 } as any,
-  sequential: { reversalScore: .8, trendPersistenceScore: .8, trendState: "DEVELOPING_FLIP", sgSlope: .01 } as any,
+  sequential: { reversalScore: .8, trendPersistenceScore: .8, trendState: "DEVELOPING_FLIP", sgSlope: .01,
+    independentGroupCount: 4, bayesianChangePoint: { bullishChangeEvidence: .8 },
+    stateSpaceTrend: { slopePositiveProbability: .85 }, sgPositiveSlopeAgreement: 1,
+    context: { higherTimeframeTrend: "BULLISH", relativeStrengthState: "BULLISH" } } as any,
   rewardRisk: 2, dataQuality: "SESSION_WINDOW_COMPLETE" as const,
   stop: 90, target1: 110,
 };

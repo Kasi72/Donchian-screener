@@ -15,7 +15,7 @@ mkdirSync(output); // Never overwrite a prior research run.
 const observations = resolve(output, "observations.jsonl");
 writeFileSync(observations, "", { flag: "wx" });
 const hash = (value) => createHash("sha256").update(value).digest("hex");
-const manifest = { version: "prediction-dataset-v1", generatedAt: new Date().toISOString(),
+const manifest = { version: "prediction-dataset-v2", generatedAt: new Date().toISOString(),
   commit: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
   workingDiffSha256: hash(execFileSync("git", ["diff", "HEAD"], { encoding: "utf8" })),
   adjustmentVerification: "UNVERIFIED_ARCHIVE", universeBias: "CURRENT_UNIVERSE_SURVIVORSHIP_NOT_RESOLVED",

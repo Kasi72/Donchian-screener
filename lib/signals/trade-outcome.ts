@@ -29,6 +29,16 @@ export interface TradeOutcome {
   horizonComplete: boolean;
 }
 
+function adverseBuyFill(price: number, tickSize?: number): number {
+  if (tickSize === undefined) return price;
+  return Number((Math.ceil(price / tickSize - 1e-10) * tickSize).toPrecision(15));
+}
+
+function adverseSellFill(price: number, tickSize?: number): number {
+  if (tickSize === undefined) return price;
+  return Number((Math.floor(price / tickSize + 1e-10) * tickSize).toPrecision(15));
+}
+
 /** Next-open long entry, one chosen limit target, stop-market, then time exit.
  * This is an outcome label, not a forecast. Incomplete horizons remain censored.
  */
@@ -64,7 +74,7 @@ export function evaluateTradeOutcome(
     }
   }
   const slip = options.slippageBps / 10_000;
-  const entry = candles[start].open * (1 + slip);
+  const entry = adverseBuyFill(candles[start].open * (1 + slip), levels.tickSize);
   result.entry = entry;
   // A setup whose first objective has already traded through is no longer a fresh entry.
   if (candles[start].open <= levels.stop || entry >= levels.target1) return { ...result, outcome: "GAP_SKIP" };
@@ -79,15 +89,15 @@ export function evaluateTradeOutcome(
   });
   for (let j = start; j < end; j++) {
     const c = candles[j];
-    if (c.open <= levels.stop) return finish("STOP", c.open * (1 - slip), j);
+    if (c.open <= levels.stop) return finish("STOP", adverseSellFill(c.open * (1 - slip), levels.tickSize), j);
     if (c.open >= target) return finish(targetName === "target1" ? "TARGET1" : "TARGET2", target, j);
     if (c.low <= levels.stop && c.high >= target && sameBarPolicy === "target-first")
       return finish(targetName === "target1" ? "TARGET1" : "TARGET2", target, j, true);
-    if (c.low <= levels.stop) return finish("STOP", levels.stop * (1 - slip), j, c.high >= target);
+    if (c.low <= levels.stop) return finish("STOP", adverseSellFill(levels.stop * (1 - slip), levels.tickSize), j, c.high >= target);
     if (c.high >= target) return finish(targetName === "target1" ? "TARGET1" : "TARGET2", target, j);
   }
   if (!result.horizonComplete) return { ...result, outcome: "CENSORED", barsHeld: end - start };
-  return finish("EXPIRED", candles[end - 1].close * (1 - slip), end - 1);
+  return finish("EXPIRED", adverseSellFill(candles[end - 1].close * (1 - slip), levels.tickSize), end - 1);
 }
 
 export function summarizeTradeOutcomes(outcomes: readonly TradeOutcome[]) {

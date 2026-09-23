@@ -122,7 +122,7 @@ export function SignalDetails({
       calibratedText,
     ],
     [
-      "95% confidence interval",
+      "Calibrated uncertainty interval",
       diagnostics?.reversalConfidenceInterval
         ? `${(diagnostics.reversalConfidenceInterval[0] * 100).toFixed(1)}%–${(diagnostics.reversalConfidenceInterval[1] * 100).toFixed(1)}%`
         : "Pending calibration — needs purged walk-forward outcomes",
@@ -159,11 +159,15 @@ export function SignalDetails({
     ["Risk percentage", recommendation.riskPercent === undefined ? `${(((recommendation.entry - recommendation.stop) / recommendation.entry) * 100).toFixed(2)}%` : `${recommendation.riskPercent.toFixed(2)}%`],
     ["Target 1 reward/risk", recommendation.target1RewardRisk?.toFixed(2) ?? ((recommendation.target1 - recommendation.entry) / (recommendation.entry - recommendation.stop)).toFixed(2)],
     ["Target 2 reward/risk", recommendation.target2RewardRisk?.toFixed(2) ?? ((recommendation.target2 - recommendation.entry) / (recommendation.entry - recommendation.stop)).toFixed(2)],
-    ["Room to reaction high (R)", recommendation.rewardRisk.toFixed(2)],
+    ["Room to reaction high (R)", recommendation.rewardRisk === null ? "Unavailable — no confirmed overhead pivot" : recommendation.rewardRisk.toFixed(2)],
     ["Execution", "Next obtainable price; recalculate risk and reward after gaps. Reference prices are not guaranteed fills."],
     ["Stop buffer", recommendation.stopBuffer === undefined ? "Unavailable" : `${formatPrice(recommendation.stopBuffer)} (${recommendation.stopBufferAtr?.toFixed(2) ?? "—"} ATR)`],
-    ["Reaction high", formatPrice(recommendation.reactionHigh)],
+    ["Reaction high", recommendation.reactionHigh === null ? "Unavailable" : formatPrice(recommendation.reactionHigh)],
     ["Maximum holding period", diagnostics ? `${diagnostics.maximumHoldingCandles} candles` : "Unavailable"],
+    ["Execution quality", recommendation.executionQuality?.status ?? "Unavailable"],
+    ["Gap risk", recommendation.executionQuality ? `${recommendation.executionQuality.gapRisk} (${recommendation.executionQuality.maximumRecentGapAtr.toFixed(2)} ATR maximum recent gap)` : "Unavailable"],
+    ["Estimated median daily turnover", recommendation.executionQuality ? formatPrice(recommendation.executionQuality.medianDailyTurnoverInr) : "Unavailable"],
+    ["Execution checks", recommendation.executionQuality?.reasons.join("; ") ?? "Unavailable"],
   ];
 
   const donchianFields: DetailField[] = [
@@ -192,6 +196,16 @@ export function SignalDetails({
         ["CUSUM evidence", `${(sequential.cusumScore * 100).toFixed(1)}%`],
         ["Causal SG slope", sequential.sgSlope === undefined ? "Unavailable" : sequential.sgSlope.toFixed(6)],
         ["Causal SG curvature", sequential.sgCurvature === undefined ? "Unavailable" : sequential.sgCurvature.toFixed(6)],
+        ["SG slope agreement", sequential.sgPositiveSlopeAgreement === undefined ? "Unavailable" : `${Math.round(sequential.sgPositiveSlopeAgreement * 3)}/3 windows positive`],
+        ["SG curvature agreement", sequential.sgPositiveCurvatureAgreement === undefined ? "Unavailable" : `${Math.round(sequential.sgPositiveCurvatureAgreement * 3)}/3 windows improving`],
+        ["SG stability", sequential.sgStabilityScore === undefined ? "Unavailable" : `${(sequential.sgStabilityScore * 100).toFixed(1)}%`],
+        ["ATR-normalized SG slope", sequential.atrNormalizedSlope === undefined ? "Unavailable" : sequential.atrNormalizedSlope.toFixed(3)],
+        ["Bayesian short-run evidence", sequential.bayesianChangePoint ? `${(sequential.bayesianChangePoint.shortRunProbability * 100).toFixed(1)}% (run length ${sequential.bayesianChangePoint.mostLikelyRunLength})` : "Unavailable"],
+        ["Bayesian bullish-change evidence", sequential.bayesianChangePoint ? `${(sequential.bayesianChangePoint.bullishChangeEvidence * 100).toFixed(1)}% evidence — not win probability` : "Unavailable"],
+        ["Latent slope probability", sequential.stateSpaceTrend ? `${(sequential.stateSpaceTrend.slopePositiveProbability * 100).toFixed(1)}% evidence — not win probability` : "Unavailable"],
+        ["Latent slope / uncertainty", sequential.stateSpaceTrend ? `${sequential.stateSpaceTrend.slope.toFixed(6)} ± ${sequential.stateSpaceTrend.slopeStandardError.toFixed(6)}` : "Unavailable"],
+        ["Higher-timeframe trend", sequential.context?.higherTimeframeTrend ?? "Unavailable"],
+        ["NIFTY relative strength", sequential.context?.relativeStrengthZ === null || sequential.context === undefined ? "Unavailable" : `${sequential.context.relativeStrengthZ.toFixed(2)} z-score (${sequential.context.relativeStrengthState})`],
         ["Robust volatility z-score", sequential.volatilityZ === undefined ? "Unavailable" : sequential.volatilityZ.toFixed(2)],
         ["Overlay evidence score", sequential.overlayScore === undefined ? "Unavailable" : `${sequential.overlayScore.toFixed(2)}/1.00`],
         ["Trend state", sequential.trendState ?? "Unavailable"],
@@ -226,7 +240,15 @@ export function SignalDetails({
     ["Structural score", `${recommendation.score.toFixed(4)} (${recommendation.scoreVersion})`],
     ["Anchor rationale", recommendation.anchorRationale],
     ["Strategy version", sequential ? `${recommendation.strategyVersion} / evidence ${sequential.version}` : recommendation.strategyVersion],
-    ["Higher timeframe", "Not configured — no higher-timeframe candles supplied (neutral by design)", "detail-value--pending"],
+    ["Higher timeframe", sequential?.context?.higherTimeframe
+      ? `${sequential.context.higherTimeframe} / ${sequential.context.higherTimeframeTrend} (completed bars only)`
+      : "Unavailable — neutral by design", sequential?.context?.higherTimeframe ? undefined : "detail-value--pending"],
+    ["Benchmark context", sequential?.context?.benchmarkSymbol
+      ? `${sequential.context.benchmarkSymbol}; ${sequential.context.benchmarkBars} aligned bars`
+      : "Unavailable — neutral by design", sequential?.context?.benchmarkSymbol ? undefined : "detail-value--pending"],
+    ["Data provider", recommendation.dataProvider ?? "Unavailable"],
+    ["Provider consensus", recommendation.providerConsensus ?? "UNAVAILABLE", recommendation.providerConsensus === "AGREED" ? "confirmation-grade--strong" : "detail-value--pending"],
+    ["Candle snapshot hash", recommendation.candleSnapshotHash ?? "Unavailable"],
     ["Market regime", diagnostics?.marketRegime ?? "Unavailable"],
     ["Data quality", diagnostics?.dataQuality ?? "Unavailable"],
     ["Calibration", calibrationText, diagnostics?.calibration && diagnostics.calibration !== "UNAVAILABLE" ? undefined : "detail-value--pending"],
@@ -236,7 +258,7 @@ export function SignalDetails({
 
   const pickDecisionFields = (labels: string[]) => decisionFields.filter(([label]) => labels.includes(label));
   const verdictFields = pickDecisionFields([
-    "Signal state", "Reversal confirmation", "Reversal probability", "95% confidence interval", "Target 1 before stop", "Evidence quality score",
+    "Signal state", "Reversal confirmation", "Reversal probability", "Calibrated uncertainty interval", "Target 1 before stop", "Evidence quality score",
   ]);
   const readinessFields = pickDecisionFields([
     "Trade tier", "Tier score", "Entry readiness", "Trade quality score", "Actionability",

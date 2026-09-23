@@ -39,7 +39,7 @@ describe("calculateSequentialEvidence", () => {
     ]);
     const evidence = calculateSequentialEvidence(candles, candles.length - 1);
 
-    expect(evidence.version).toBe("sequential-v1");
+    expect(evidence.version).toBe("sequential-v2");
     expect(evidence.cusumScore).toBeGreaterThan(0.5);
     expect(evidence.changePointProbability).toBeGreaterThan(0.5);
     expect(evidence.reversalScore).toBeGreaterThan(0.5);
@@ -49,10 +49,15 @@ describe("calculateSequentialEvidence", () => {
     expect(evidence.sgCurvature).toBeGreaterThanOrEqual(0);
     expect(Number.isFinite(evidence.volatilityZ)).toBe(true);
     expect(evidence.overlayScore).toBeGreaterThan(0.5);
+    expect(evidence.bayesianChangePoint?.positiveShiftProbability).toBeGreaterThan(0.5);
+    expect(evidence.stateSpaceTrend?.slopePositiveProbability).toBeGreaterThan(0.5);
+    expect(evidence.sgPositiveSlopeAgreement).toBe(1);
     expect(evidence.trendPersistenceScore).toBeGreaterThan(0.5);
     expect(evidence.trendState).toMatch(/DEVELOPING_FLIP|TREND_EVIDENCE_SUPPORTED/);
     expect(evidence.state).not.toBe("CONFIRMED_REVERSAL");
     expect(evidence.traderSummary).toContain("Donchian");
+    expect(evidence.independentGroupCount).toBeLessThanOrEqual(3);
+    expect(evidence.evidenceGroups?.filter((group) => group.startsWith("TREND_"))).toHaveLength(1);
 
     candles.push({ time: 99, open: 1, high: 2, low: 0.5, close: 1.9, volume: 99_000 });
     expect(calculateSequentialEvidence(candles, candles.length - 2)).toEqual(evidence);

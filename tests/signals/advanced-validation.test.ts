@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { benjaminiHochberg, bayesianRate, conformalProbabilityInterval, purgedWalkForwardFolds } from "@/lib/signals/advanced-validation";
+import { benjaminiHochberg, bayesianRate, conformalProbabilityInterval, conformalProbabilityIntervalFor, localBayesianProbabilityIntervalFor, purgedWalkForwardFolds } from "@/lib/signals/advanced-validation";
 import { fitPurgedWalkForwardCalibration } from "@/lib/signals/calibration-pipeline";
 
 describe("advanced validation primitives", () => {
@@ -9,6 +9,18 @@ describe("advanced validation primitives", () => {
     expect(result.estimate).toBeLessThan(0.75);
     expect(result.lower).toBeGreaterThanOrEqual(0);
     expect(result.upper).toBeLessThanOrEqual(1);
+  });
+
+  it("centres a live conformal interval on the requested prediction", () => {
+    const interval = conformalProbabilityIntervalFor(0.25, [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8], [0, 0, 0, 0, 1, 1, 1, 1]);
+    expect(interval[0]).toBeLessThanOrEqual(0.25);
+    expect(interval[1]).toBeGreaterThanOrEqual(0.25);
+  });
+
+  it("uses local outcome evidence instead of binary residual width for uncertainty", () => {
+    const interval = localBayesianProbabilityIntervalFor(0.2, [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8], [1, 1, 1, 1, 1, 1, 1, 1], 0.95);
+    expect(interval[0]).toBeGreaterThan(0.5);
+    expect(interval[1]).toBeLessThanOrEqual(1);
   });
 
   it("creates a bounded split-conformal interval from held-out outcomes", () => {

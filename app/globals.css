@@ -812,6 +812,7 @@ thead .details-column { z-index: 4; }
 
 th,
 td {
+  box-sizing: border-box;
   padding: 13px 12px;
   border-bottom: 1px solid var(--border);
   text-align: left;

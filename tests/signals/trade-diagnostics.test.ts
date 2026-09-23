@@ -20,7 +20,7 @@ const confirmation: ReversalConfirmation = {
 };
 
 const sequential: SequentialEvidence = {
-  version: "sequential-v1",
+  version: "sequential-v2",
   cusumScore: 0.7,
   changePointProbability: 0.7,
   trendProbability: 0.7,

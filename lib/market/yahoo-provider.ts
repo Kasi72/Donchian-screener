@@ -1,9 +1,11 @@
 import "server-only";
+import { createHash } from "node:crypto";
 
 import YahooFinance from "yahoo-finance2";
 
 import { normalizeCandles, type YahooCandle } from "./normalize-candles";
 import { latestExpectedNseCompletion, nseCandleEligibility } from "./nse-session";
+import { aggregateCompletedDailyCandles } from "./aggregate-candles";
 import {
   BoundedCandleCache,
   GLOBAL_CANDLE_CACHE,
@@ -198,10 +200,11 @@ export class YahooMarketDataProvider implements MarketDataProvider {
     if (cached !== undefined) return cached;
     const signal = effectiveSignal(requestOptions);
     if (signal.aborted) throw signal.reason;
+    const sourceTimeframe: Timeframe = timeframe === "1wk" || timeframe === "1mo" ? "1d" : timeframe;
     const options = {
       period1: new Date(now.getTime() - LOOKBACK_MS[timeframe]),
       period2: now,
-      interval: timeframe,
+      interval: sourceTimeframe,
       includePrePost: false as const,
     };
 
@@ -212,18 +215,39 @@ export class YahooMarketDataProvider implements MarketDataProvider {
           () => this.client.chart(symbol, options, { fetchOptions: { signal } }),
           signal,
         );
-        const normalized = normalizeCandles(
-          repairCompletedDailySnapshot(result.quotes, result.meta, timeframe),
-          timeframe,
+        const source = normalizeCandles(
+          repairCompletedDailySnapshot(result.quotes, result.meta, sourceTimeframe),
+          sourceTimeframe,
           now,
           {
           adjustmentMode,
           },
         );
-        if (normalized.status !== "PROVIDER_RATE_LIMITED") {
-          this.cache?.set(cacheKey, normalized);
+        const normalized: CandleResponse = timeframe === sourceTimeframe
+          ? source
+          : source.status === "OK" || source.status === "INSUFFICIENT_HISTORY"
+            ? (() => {
+                const candles = aggregateCompletedDailyCandles(source.candles, timeframe as Extract<Timeframe, "1wk" | "1mo">, now);
+                return {
+                  status: candles.length < 100 ? "INSUFFICIENT_HISTORY" as const : "OK" as const,
+                  candles,
+                  asOf: candles.at(-1)?.time ?? 0,
+                  adjustmentMode,
+                };
+              })()
+            : source;
+        const response: CandleResponse = {
+          ...normalized,
+          provenance: {
+            providerId: "yahoo-chart-v1",
+            snapshotHash: createHash("sha256").update(JSON.stringify({ symbol, timeframe, adjustmentMode, candles: normalized.candles })).digest("hex"),
+            consensus: "SINGLE_SOURCE",
+          },
+        };
+        if (response.status !== "PROVIDER_RATE_LIMITED") {
+          this.cache?.set(cacheKey, response);
         }
-        return normalized;
+        return response;
       } catch (error) {
         if (signal.aborted) throw signal.reason ?? error;
         if (isSymbolNotFound(error)) {

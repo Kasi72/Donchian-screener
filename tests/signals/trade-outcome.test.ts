@@ -38,6 +38,16 @@ describe("executable outcome labels", () => {
     expect(result.netR).toBeLessThan(result.grossR!);
     expect(() => evaluateTradeOutcome(history, 0, levels, { ...costs, feeBps: NaN })).toThrow();
   });
+  it("rounds simulated market fills adversely to the exchange tick", () => {
+    const tickLevels = { ...levels, tickSize: 0.05 };
+    const result = evaluateTradeOutcome(
+      [bar(0), bar(1, 100.03, 105, 95, 100.02)],
+      0,
+      tickLevels,
+      { ...costs, horizon: 2 },
+    );
+    expect(result.entry).toBe(100.05);
+  });
   it("keeps post-signal excursions separate from the realized exit", () => {
     const result = evaluateTradeOutcome([bar(0), bar(1, 100, 111, 95, 110), bar(2, 110, 150, 70, 120)], 0, levels, { ...costs, horizon: 2 });
     expect(result).toMatchObject({ exitIndex: 1, netR: 1, fixedHorizonMfeR: 5, fixedHorizonMaeR: -3, horizonComplete: true });

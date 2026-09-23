@@ -43,6 +43,7 @@ import { calculateTradeLevels } from "./risk-levels";
 import { atrAt } from "./atr";
 import { classifySignalTier, type EntryReadiness, type SignalTier } from "./signal-tier";
 import { priceToTicks } from "./ticks";
+import { assessExecutionQuality, type ExecutionQuality } from "./execution-quality";
 import {
   ATR_PERIOD,
   PIVOT_RIGHT_BARS,
@@ -97,8 +98,9 @@ export interface BuyRecommendation {
     | "nse-cm-price-band-2025-v1"
     | "nse-cm-legacy-0.05-v1"
     | "nse-index-metadata-v1";
-  reactionHigh: number;
-  rewardRisk: number;
+  reactionHigh: number | null;
+  rewardRisk: number | null;
+  hasTarget1Room?: boolean;
   riskPerShare?: number;
   riskPercent?: number;
   target1RewardRisk?: number;
@@ -108,7 +110,7 @@ export interface BuyRecommendation {
   scoreVersion: "structural-v1";
   score: number;
   scoreComponents: StructuralScoreComponents;
-  higherTimeframeInput: "NEUTRAL_UNAVAILABLE";
+  higherTimeframeInput: "BULLISH" | "BEARISH" | "NEUTRAL" | "NEUTRAL_UNAVAILABLE";
   anchorRationale: string;
   confirmation?: ReversalConfirmation;
   /** Causal evidence state; the Donchian gate remains the hard BUY condition. */
@@ -120,6 +122,10 @@ export interface BuyRecommendation {
   entryReadiness?: EntryReadiness;
   tierReason?: string;
   tierWarnings?: string[];
+  executionQuality?: ExecutionQuality;
+  candleSnapshotHash?: string;
+  dataProvider?: string;
+  providerConsensus?: "AGREED" | "DIVERGED" | "SINGLE_SOURCE" | "UNAVAILABLE";
   companyName?: string;
   industry?: string;
 }
@@ -144,6 +150,8 @@ export interface ScanSymbolOptions {
   now?: Date;
   signal?: AbortSignal;
   deadlineMs?: number;
+  benchmarkCandles?: readonly Candle[];
+  benchmarkSymbol?: string;
 }
 
 function providerFailure(symbol: string): ScanItemResult {
@@ -270,29 +278,33 @@ export async function scanSymbol(
     ) {
       return { symbol: instrument.symbol, status: "NO_SIGNAL" };
     }
+    const dependencyStartIndex = Math.min(
+      selected.anchor.index,
+      Math.max(0, signalIndex - 30),
+    );
     const windowAudit =
       timeframe === "1d"
         ? auditDailyCandleWindow(
             candleResponse.candles,
-            signalIndex - selected.period + 1,
+            dependencyStartIndex,
             signalIndex,
           )
         : undefined;
     if (windowAudit !== undefined && !windowAudit.complete) {
       return {
         symbol: instrument.symbol,
-        status: "NO_SIGNAL",
-        message: `Incomplete daily Donchian window: ${windowAudit.missingSessions} NSE session(s) missing.`,
+        status: "DATA_QUALITY_LIMITATION",
+        message: `Incomplete daily calculation dependency window: ${windowAudit.missingSessions} NSE session(s) missing.`,
       };
     }
     const intradayWindowAudit = timeframe === "5m" || timeframe === "15m" || timeframe === "1h"
-      ? auditIntradayCandleWindow(candleResponse.candles, signalIndex - selected.period + 1, signalIndex, timeframe)
+      ? auditIntradayCandleWindow(candleResponse.candles, dependencyStartIndex, signalIndex, timeframe)
       : undefined;
     if (intradayWindowAudit !== undefined && !intradayWindowAudit.complete) {
       return {
         symbol: instrument.symbol,
-        status: "NO_SIGNAL",
-        message: `Incomplete intraday Donchian window: ${intradayWindowAudit.missingBars} bar(s) missing.`,
+        status: "DATA_QUALITY_LIMITATION",
+        message: `Incomplete intraday calculation dependency window: ${intradayWindowAudit.missingBars} bar(s) missing.`,
       };
     }
     const levels = calculateTradeLevels(
@@ -318,6 +330,12 @@ export async function scanSymbol(
     const sequentialEvidence = calculateSequentialEvidence(
       candleResponse.candles,
       signalIndex,
+      undefined,
+      {
+        timeframe,
+        ...(options.benchmarkCandles ? { benchmarkCandles: options.benchmarkCandles } : {}),
+        ...(options.benchmarkSymbol ? { benchmarkSymbol: options.benchmarkSymbol } : {}),
+      },
     );
     const tradeDiagnostics = calculateTradeDiagnostics({
       confirmation,
@@ -325,7 +343,9 @@ export async function scanSymbol(
       rewardRisk: levels.rewardRisk,
       ...(windowAudit ? { windowAudit } : {}),
       ...(intradayWindowAudit ? { intradayWindowAudit } : {}),
+      providerConsensus: candleResponse.provenance?.consensus ?? "UNAVAILABLE",
     });
+    const executionQuality = assessExecutionQuality(candleResponse.candles, signalIndex, timeframe, levels);
     const tier = classifySignalTier({
       confirmation,
       sequential: sequentialEvidence,
@@ -391,6 +411,7 @@ export async function scanSymbol(
       tickPolicy: tickResolution.policy,
       reactionHigh: levels.reactionHigh,
       rewardRisk: levels.rewardRisk,
+      hasTarget1Room: levels.hasTarget1Room,
       riskPerShare: levels.riskPerShare,
       riskPercent: levels.riskPercent,
       target1RewardRisk: levels.target1RewardRisk,
@@ -400,17 +421,29 @@ export async function scanSymbol(
       scoreVersion: selected.scoreVersion,
       score: selected.score,
       scoreComponents: selected.scoreComponents,
-      higherTimeframeInput: "NEUTRAL_UNAVAILABLE",
-      anchorRationale: `Selected confirmed pivot low ${selected.period} bars earlier: prominence ${selected.anchor.prominenceAtr.toFixed(2)} ATR, recovery ${selected.anchor.recoveryAtr.toFixed(2)} ATR, ${selected.scoreVersion} score ${selected.score.toFixed(4)}. Higher-timeframe input is unavailable and contributes a neutral zero.`,
+      higherTimeframeInput: sequentialEvidence.context?.higherTimeframeTrend === "UNAVAILABLE" || !sequentialEvidence.context
+        ? "NEUTRAL_UNAVAILABLE"
+        : sequentialEvidence.context.higherTimeframeTrend,
+      anchorRationale: `Selected confirmed pivot low ${selected.period} bars earlier: prominence ${selected.anchor.prominenceAtr.toFixed(2)} ATR, recovery ${selected.anchor.recoveryAtr.toFixed(2)} ATR, ${selected.scoreVersion} score ${selected.score.toFixed(4)}. Higher-timeframe context: ${sequentialEvidence.context?.higherTimeframeTrend ?? "unavailable (neutral)"}.`,
       confirmation,
       signalState: sequentialEvidence.state,
       sequentialEvidence,
       tradeDiagnostics,
       signalTier: tier.tier,
       tierScore: tier.tierScore,
-      entryReadiness: tier.entryReadiness,
+      entryReadiness: executionQuality.status === "SKIP"
+        ? "SKIP"
+        : executionQuality.status === "EXECUTABLE"
+          ? tier.entryReadiness
+          : "REVIEW_RISK",
       tierReason: tier.tierReason,
-      tierWarnings: tier.warnings,
+      tierWarnings: executionQuality.status === "EXECUTABLE"
+        ? tier.warnings
+        : [...tier.warnings, ...executionQuality.reasons],
+      executionQuality,
+      ...(candleResponse.provenance?.snapshotHash ? { candleSnapshotHash: candleResponse.provenance.snapshotHash } : {}),
+      ...(candleResponse.provenance?.providerId ? { dataProvider: candleResponse.provenance.providerId } : {}),
+      providerConsensus: candleResponse.provenance?.consensus ?? "UNAVAILABLE",
       ...(resolvedInstrument.companyName
         ? { companyName: resolvedInstrument.companyName }
         : {}),

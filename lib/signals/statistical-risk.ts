@@ -1,4 +1,5 @@
 import type { Candle, Timeframe } from "@/lib/market/provider";
+import { aggregateCompletedDailyCandles } from "@/lib/market/aggregate-candles";
 
 export interface BlockBootstrapInterval { estimate: number; lower: number; upper: number; samples: number; }
 export interface CostAdjustedExpectancy { grossExpectancyR: number; netExpectancyR: number; costR: number; actionable: boolean; }
@@ -14,7 +15,7 @@ function quantile(values: readonly number[], probability: number): number {
 
 /** Deterministic block bootstrap preserving local serial dependence. */
 export function blockBootstrapInterval(values: readonly number[], blockSize = 5, samples = 1_000, seed = 17): BlockBootstrapInterval {
-  if (values.length < 2 || !Number.isInteger(blockSize) || blockSize < 1 || !Number.isInteger(samples) || samples < 100) throw new RangeError("Insufficient block-bootstrap inputs");
+  if (values.length < 2 || values.some((value) => !Number.isFinite(value)) || !Number.isInteger(blockSize) || blockSize < 1 || blockSize > values.length || !Number.isInteger(samples) || samples < 100) throw new RangeError("Insufficient block-bootstrap inputs");
   let state = seed >>> 0;
   const random = () => { state = (1664525 * state + 1013904223) >>> 0; return state / 0x1_0000_0000; };
   const means: number[] = [];
@@ -34,8 +35,8 @@ export function blockBootstrapInterval(values: readonly number[], blockSize = 5,
 export function costAdjustedExpectancy(grossR: readonly number[], riskPrice: readonly number[], entryPrice: readonly number[], slippageBps: number, feeBps: number): CostAdjustedExpectancy {
   if (grossR.length !== riskPrice.length || grossR.length !== entryPrice.length || !grossR.length ||
     ![slippageBps, feeBps].every((value) => Number.isFinite(value) && value >= 0 && value < 10_000) ||
-    riskPrice.some((value) => !Number.isFinite(value) || value <= 0) || entryPrice.some((value) => !Number.isFinite(value) || value <= 0)) throw new RangeError("Invalid cost-adjusted expectancy inputs");
-  const costs = entryPrice.map((entry, index) => ((entry * slippageBps + entry * feeBps * 2) / 10_000) / riskPrice[index]);
+    grossR.some((value) => !Number.isFinite(value)) || riskPrice.some((value) => !Number.isFinite(value) || value <= 0) || entryPrice.some((value) => !Number.isFinite(value) || value <= 0)) throw new RangeError("Invalid cost-adjusted expectancy inputs");
+  const costs = entryPrice.map((entry, index) => ((entry * (slippageBps + feeBps) * 2) / 10_000) / riskPrice[index]);
   const net = grossR.map((value, index) => value - costs[index]);
   const grossExpectancyR = grossR.reduce((sum, value) => sum + value, 0) / grossR.length;
   const netExpectancyR = net.reduce((sum, value) => sum + value, 0) / net.length;
@@ -44,12 +45,7 @@ export function costAdjustedExpectancy(grossR: readonly number[], riskPrice: rea
 
 /** Aggregates verified daily candles into exchange-neutral weekly/monthly bars. */
 export function aggregateCompletedCandles(candles: readonly Candle[], timeframe: Extract<Timeframe, "1wk" | "1mo">): Candle[] {
-  if (!candles.length || candles.some((candle, index) => ![candle.time, candle.open, candle.high, candle.low, candle.close, candle.volume].every(Number.isFinite) || (index > 0 && candle.time <= candles[index - 1].time))) throw new RangeError("Aggregation requires ordered valid candles");
-  const groups = new Map<string, Candle[]>();
-  for (const candle of candles) {
-    const date = new Date(candle.time);
-    const key = timeframe === "1mo" ? `${date.getUTCFullYear()}-${date.getUTCMonth()}` : (() => { const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())); const monday = new Date(day.getTime() - ((day.getUTCDay() + 6) % 7) * 86_400_000); return monday.toISOString().slice(0, 10); })();
-    const bucket = groups.get(key); if (bucket) bucket.push(candle); else groups.set(key, [candle]);
-  }
-  return [...groups.values()].map((bucket) => ({ time: bucket[0].time, open: bucket[0].open, high: Math.max(...bucket.map((c) => c.high)), low: Math.min(...bucket.map((c) => c.low)), close: bucket.at(-1)!.close, volume: bucket.reduce((sum, c) => sum + c.volume, 0) }));
+  if (!candles.length) throw new RangeError("Aggregation requires ordered valid candles");
+  const last = candles.at(-1)!.time;
+  return aggregateCompletedDailyCandles(candles, timeframe, new Date(last + 40 * 86_400_000));
 }

@@ -49,6 +49,17 @@ function quoteTime(quote: YahooCandle): number | null {
   return Number.isFinite(time) ? time : null;
 }
 
+function kolkataDate(time: number): { year: number; month: number; day: number } {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date(time)).map((part) => [part.type, part.value]));
+  return { year: Number(parts.year), month: Number(parts.month), day: Number(parts.day) };
+}
+
+function hasMissingOhlcv(quote: YahooCandle): boolean {
+  return quote.open == null || quote.high == null || quote.low == null || quote.close == null || quote.volume == null;
+}
+
 function isValidQuote(quote: YahooCandle): quote is ValidYahooCandle {
   const { open, high, low, close, volume } = quote;
   if (
@@ -67,9 +78,9 @@ function isValidQuote(quote: YahooCandle): quote is ValidYahooCandle {
   }
 
   return (
-    open >= 0 &&
-    high >= 0 &&
-    low >= 0 &&
+    open > 0 &&
+    high > 0 &&
+    low > 0 &&
     close > 0 &&
     volume >= 0 &&
     high >= low &&
@@ -159,16 +170,15 @@ export function normalizeCandles(
     time: quoteTime(quote),
   }));
   const hasUnparseableTimestamp = parsedInput.some((candidate) => candidate.time === null);
-  const parsedQuotes = parsedInput.filter(
-    ({ quote }) =>
-      !isZeroVolumeFlatPlaceholder(quote) && !isWhollyEmptyPlaceholder(quote),
-  );
+  const parsedQuotes = parsedInput;
   let hasInvalidSession = false;
   let hasUnsupportedCalendar = false;
   const candidates = parsedQuotes
     .filter(
       (candidate): candidate is { quote: YahooCandle; index: number; time: number } => {
         if (candidate.time === null) return false;
+        const session = calendar.sessionFor(kolkataDate(candidate.time));
+        if (isZeroVolumeFlatPlaceholder(candidate.quote) && session.kind === "CLOSED") return false;
         const eligibility = nseCandleEligibility(
           candidate.time,
           timeframe,
@@ -180,6 +190,9 @@ export function normalizeCandles(
           return false;
         }
         if (eligibility === "INVALID_SESSION") {
+          if (isZeroVolumeFlatPlaceholder(candidate.quote) || isWhollyEmptyPlaceholder(candidate.quote)) {
+            return false;
+          }
           hasInvalidSession = true;
           return false;
         }
@@ -204,7 +217,7 @@ export function normalizeCandles(
       // forming provider snapshot, not evidence that the completed feed is
       // corrupt. Preserve strict rejection for malformed older rows and for
       // malformed duplicates that share a timestamp with a valid quote.
-      if (candidate.time === latestCandidateTime && !validPayloadTimes.has(candidate.time)) {
+      if (candidate.time === latestCandidateTime && !validPayloadTimes.has(candidate.time) && hasMissingOhlcv(candidate.quote)) {
         ignoredLatestPartial = true;
         continue;
       }
@@ -238,10 +251,14 @@ export function normalizeCandles(
   const asOf = candles.at(-1)?.time ?? 0;
   const expectedCompletion = latestExpectedNseCompletion(timeframe, now, calendar)!;
   const actualCompletion = asOf === 0 ? undefined : nseCandleCompletion(asOf, timeframe, calendar);
+  const partialLagLimit = timeframe === "1d" ? 3 * DAY_MS
+    : timeframe === "1wk" ? 10 * DAY_MS
+      : timeframe === "1mo" ? 35 * DAY_MS
+        : 0;
   const partialSnapshotLagAllowed =
     ignoredLatestPartial &&
     actualCompletion !== undefined &&
-    expectedCompletion - actualCompletion <= 3 * DAY_MS;
+    expectedCompletion - actualCompletion <= partialLagLimit;
   if (
     asOf !== 0 &&
     (actualCompletion === undefined ||

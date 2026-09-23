@@ -51,12 +51,14 @@ export function calculateTradeDiagnostics({
   rewardRisk,
   windowAudit,
   intradayWindowAudit,
+  providerConsensus,
 }: {
   confirmation: ReversalConfirmation;
   sequential: SequentialEvidence;
-  rewardRisk: number;
+  rewardRisk: number | null;
   windowAudit?: DailyCandleWindowAudit;
   intradayWindowAudit?: IntradayCandleWindowAudit;
+  providerConsensus?: "AGREED" | "DIVERGED" | "SINGLE_SOURCE" | "UNAVAILABLE";
 }): TradeDiagnostics {
   const calibrated = sequential.calibratedProbability;
   const dailyComplete = windowAudit !== undefined && windowAudit.complete && windowAudit.expectedSessions > 0 &&
@@ -64,14 +66,15 @@ export function calculateTradeDiagnostics({
   const intradayComplete = intradayWindowAudit !== undefined && intradayWindowAudit.complete &&
     intradayWindowAudit.expectedBars > 0 && intradayWindowAudit.observedBars === intradayWindowAudit.expectedBars &&
     intradayWindowAudit.missingBars === 0;
-  const dataQuality: DataQualityStatus = dailyComplete || intradayComplete
-    ? "SESSION_WINDOW_COMPLETE"
+  const dataQuality: DataQualityStatus = (dailyComplete || intradayComplete) && providerConsensus === "AGREED"
+    ? "VERIFIED"
+    : dailyComplete || intradayComplete ? "SESSION_WINDOW_COMPLETE"
     : windowAudit !== undefined || intradayWindowAudit !== undefined ? "LIMITED" : "NOT_AUDITED";
   // Stock trend evidence cannot establish the wider market's regime.
   const marketRegime: MarketRegime = sequential.marketRegime === "TRENDING_BULL" ? "BULLISH"
     : sequential.marketRegime === "TRANSITION" ? "NEUTRAL_TO_BULLISH"
       : sequential.marketRegime === "RANGE_BOUND" || sequential.marketRegime === "HIGH_VOLATILITY" ? "NEUTRAL" : "UNAVAILABLE";
-  const rewardQuality = clamp((rewardRisk - 1) / 2);
+  const rewardQuality = rewardRisk === null ? 0.5 : clamp((rewardRisk - 1) / 2);
   const evidenceQualityScore = round(100 * clamp(
     0.45 * confirmation.score / 100 +
       0.25 * sequential.reversalScore +
@@ -106,6 +109,11 @@ export function calculateTradeDiagnostics({
       intradayWindowAudit
         ? `Intraday continuity audit: ${intradayWindowAudit.observedBars}/${intradayWindowAudit.expectedBars} bars observed.`
         : "Intraday continuity audit is not applicable to this timeframe.",
+      providerConsensus === "AGREED"
+        ? "Independent provider OHLC agrees in tick space."
+        : providerConsensus === "DIVERGED"
+          ? "Independent provider OHLC diverges; model-derived actionability must remain disabled."
+          : "Independent provider consensus is unavailable; session completeness is reported separately.",
     ],
     // No calibrated, cost-adjusted outcome model is active in production.
     actionability: "STRUCTURAL_ONLY",

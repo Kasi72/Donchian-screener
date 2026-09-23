@@ -16,6 +16,17 @@ describe("statistical risk safeguards", () => {
     expect(result.actionable).toBe(false);
   });
 
+  it("charges slippage and fees on both sides and rejects non-finite returns", () => {
+    const result = costAdjustedExpectancy([1], [10], [100], 10, 5);
+    expect(result.costR).toBeCloseTo(0.03, 12);
+    expect(result.netExpectancyR).toBeCloseTo(0.97, 12);
+    expect(() => costAdjustedExpectancy([Number.NaN], [10], [100], 10, 5)).toThrow(RangeError);
+  });
+
+  it("rejects non-finite bootstrap observations", () => {
+    expect(() => blockBootstrapInterval([1, Number.NaN], 1, 100)).toThrow(RangeError);
+  });
+
   it("aggregates ordered daily candles without future leakage", () => {
     const candles = [0, 1, 2].map((day) => ({ time: Date.UTC(2026, 0, 5 + day), open: 100 + day, high: 105 + day, low: 95 + day, close: 103 + day, volume: 1000 }));
     const weekly = aggregateCompletedCandles(candles, "1wk");
