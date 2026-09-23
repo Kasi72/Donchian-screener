@@ -202,8 +202,8 @@ function isBuyRecommendation(value: unknown, symbol: string): boolean {
     (value.tickPolicy === "nse-cm-price-band-2025-v1" ||
       value.tickPolicy === "nse-cm-legacy-0.05-v1" ||
       value.tickPolicy === "nse-index-metadata-v1") &&
-    isFiniteNumber(value.reactionHigh) &&
-    isFiniteNumber(value.rewardRisk) &&
+    (value.reactionHigh === null || isFiniteNumber(value.reactionHigh)) &&
+    (value.rewardRisk === null || isFiniteNumber(value.rewardRisk)) &&
     value.scoreVersion === "structural-v1" &&
     isFiniteNumber(value.score) &&
     hasFiniteScoreComponents(value.scoreComponents) &&
