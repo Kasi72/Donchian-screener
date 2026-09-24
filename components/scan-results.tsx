@@ -358,7 +358,7 @@ export function ScanResults({
                       {result.recommendation?.signalTier?.replaceAll("_", " ") ?? "—"}
                     </td>
                     <td className={`table-signal-state table-signal-state--${signalStateText(result).toLowerCase()}`}>
-                      {signalStateText(result)}
+                      {signalStateText(result).replaceAll("_", " ")}
                     </td>
                     <td className={`table-confirmation table-confirmation--${result.recommendation?.confirmation?.grade?.toLowerCase() ?? "none"}`}>
                       {confirmationText(result)}

@@ -616,8 +616,11 @@ select:disabled {
 .table-scroll {
   width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
   border-top: 1px solid var(--border-strong);
   border-bottom: 1px solid var(--border-strong);
+  border-radius: 10px;
+  scrollbar-width: thin;
 }
 
 .results-toolbar {
@@ -750,6 +753,7 @@ thead .instrument-column {
   left: 52px;
   z-index: 1;
   background: var(--surface);
+  white-space: nowrap;
 }
 
 input[type="checkbox"] {
@@ -769,7 +773,7 @@ input[type="checkbox"] {
 
 table {
   width: 100%;
-  min-width: 1040px;
+  min-width: 1480px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 14px;
@@ -777,24 +781,21 @@ table {
 
 /* Keep the diagnostic table readable while allowing the added tier fields to
    fit at desktop widths. Narrow screens retain intentional horizontal scroll. */
-table th:nth-child(1), table td:nth-child(1) { width: 48px; }
-table th:nth-child(2), table td:nth-child(2) { width: 75px; }
-table th:nth-child(3), table td:nth-child(3) { width: 55px; }
-table th:nth-child(4), table td:nth-child(4) { width: 82px; }
-table th:nth-child(5), table td:nth-child(5) { width: 82px; }
-table th:nth-child(6), table td:nth-child(6) { width: 82px; }
-table th:nth-child(7), table td:nth-child(7) { width: 55px; }
-table th:nth-child(8), table td:nth-child(8) { width: 70px; }
+table th:nth-child(1), table td:nth-child(1) { width: 52px; }
+table th:nth-child(2), table td:nth-child(2) { width: 132px; }
+table th:nth-child(3), table td:nth-child(3) { width: 76px; }
+table th:nth-child(4), table td:nth-child(4) { width: 118px; }
+table th:nth-child(5), table td:nth-child(5) { width: 124px; }
+table th:nth-child(6), table td:nth-child(6) { width: 168px; }
+table th:nth-child(7), table td:nth-child(7) { width: 82px; }
+table th:nth-child(8), table td:nth-child(8) { width: 126px; }
 table th:nth-child(9), table td:nth-child(9),
 table th:nth-child(10), table td:nth-child(10),
 table th:nth-child(11), table td:nth-child(11),
-table th:nth-child(12), table td:nth-child(12) { width: 60px; }
-table th:nth-child(13), table td:nth-child(13) { width: 55px; }
-table th:nth-child(14), table td:nth-child(14) { width: 90px; }
-
-@media (min-width: 1101px) {
-  table { min-width: 0; }
-}
+table th:nth-child(12), table td:nth-child(12) { width: 106px; }
+table th:nth-child(13), table td:nth-child(13) { width: 88px; }
+table th:nth-child(14), table td:nth-child(14) { width: 144px; }
+table th:nth-child(15), table td:nth-child(15) { width: 100px; }
 
 .details-column {
   position: sticky;
@@ -813,10 +814,10 @@ thead .details-column { z-index: 4; }
 th,
 td {
   box-sizing: border-box;
-  padding: 13px 12px;
+  padding: 14px 12px;
   border-bottom: 1px solid var(--border);
   text-align: left;
-  vertical-align: middle;
+  vertical-align: top;
 }
 
 thead th {
@@ -1141,9 +1142,11 @@ tbody tr:last-child > * {
 .table-tier,
 .table-readiness {
   font-weight: 700;
-  max-width: 150px;
-  overflow-wrap: anywhere;
+  max-width: none;
+  overflow-wrap: normal;
+  word-break: normal;
   white-space: normal;
+  line-height: 1.35;
 }
 
 .table-tier--confirmed_reversal { color: var(--signal-confirmed); }
@@ -1155,14 +1158,14 @@ tbody tr:last-child > * {
 
 .signal-state-column,
 .confirmation-column {
-  min-width: 132px;
-  max-width: 150px;
+  min-width: 0;
+  max-width: none;
   white-space: normal;
 }
 
 .sort-button--wrap {
   width: 100%;
-  max-width: 150px;
+  max-width: none;
   white-space: normal;
   line-height: 1.25;
 }
