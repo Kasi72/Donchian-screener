@@ -93,6 +93,7 @@ describe("ScanResults", () => {
 
     const table = screen.getByRole("table", { name: "Scan results" });
     expect(table).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Top horizontal scroll for scan results" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Scrollable scan results" })).toContainElement(table);
     expect(screen.getAllByRole("row")).toHaveLength(RESULTS.length + 1);
     expect(screen.getByText("₹1,400.05")).toBeInTheDocument();

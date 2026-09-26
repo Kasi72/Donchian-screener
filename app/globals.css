@@ -613,14 +613,29 @@ select:disabled {
   color: var(--muted);
 }
 
+.table-top-scroll,
 .table-scroll {
   width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  border-top: 1px solid var(--border-strong);
-  border-bottom: 1px solid var(--border-strong);
   border-radius: 10px;
   scrollbar-width: thin;
+}
+
+.table-top-scroll {
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+}
+
+.table-top-scroll__content {
+  width: 1480px;
+  height: 12px;
+}
+
+.table-scroll {
+  border-top: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
 }
 
 .results-toolbar {

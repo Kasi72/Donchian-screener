@@ -112,6 +112,8 @@ export function ScanResults({
   const [detailsRowId, setDetailsRowId] = useState<string>();
   const [previousResults, setPreviousResults] = useState(results);
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
 
   if (results !== previousResults) {
     const validIds = new Set(results.map((result, index) => rowId(result, index)));
@@ -185,6 +187,12 @@ export function ScanResults({
       }
       return next;
     });
+  }
+
+  function syncHorizontalScroll(source: HTMLDivElement, target: HTMLDivElement | null): void {
+    if (target && target.scrollLeft !== source.scrollLeft) {
+      target.scrollLeft = source.scrollLeft;
+    }
   }
 
   return (
@@ -306,7 +314,24 @@ export function ScanResults({
         </div>
       </section>
 
-      <div className="table-scroll" role="region" tabIndex={0} aria-label="Scrollable scan results">
+      <div
+        ref={topScrollRef}
+        className="table-top-scroll"
+        role="region"
+        tabIndex={0}
+        aria-label="Top horizontal scroll for scan results"
+        onScroll={(event) => syncHorizontalScroll(event.currentTarget, tableScrollRef.current)}
+      >
+        <div className="table-top-scroll__content" aria-hidden="true" />
+      </div>
+      <div
+        ref={tableScrollRef}
+        className="table-scroll"
+        role="region"
+        tabIndex={0}
+        aria-label="Scrollable scan results"
+        onScroll={(event) => syncHorizontalScroll(event.currentTarget, topScrollRef.current)}
+      >
         <table aria-label="Scan results">
           <thead>
             <tr>
