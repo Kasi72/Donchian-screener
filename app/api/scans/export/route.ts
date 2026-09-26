@@ -213,7 +213,7 @@ const recommendationSchema = z.object({
   providerConsensus: z.enum(["AGREED", "DIVERGED", "SINGLE_SOURCE", "UNAVAILABLE"]).optional(),
   candleSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   executionQuality: z.object({
-    status: z.enum(["EXECUTABLE", "REVIEW_GAP_RISK", "WIDE_STOP", "INSUFFICIENT_LIQUIDITY", "SKIP"]),
+    status: z.enum(["EXECUTABLE", "REVIEW_GAP_RISK", "WIDE_STOP", "INSUFFICIENT_LIQUIDITY", "INSUFFICIENT_ROOM", "SKIP"]),
     gapRisk: z.enum(["LOW", "MODERATE", "HIGH"]),
     maximumRecentGapAtr: z.number().finite().nonnegative(),
     medianDailyTurnoverInr: z.number().finite().nonnegative(),

@@ -523,6 +523,31 @@ describe("scan CSV export", () => {
     }));
   });
 
+  it("exports BUY rows with an insufficient-room execution status", async () => {
+    const buy = recommendation({
+      reactionHigh: null,
+      rewardRisk: null,
+      executionQuality: {
+        status: "INSUFFICIENT_ROOM",
+        gapRisk: "LOW",
+        maximumRecentGapAtr: 0,
+        medianDailyTurnoverInr: 1_000_000,
+        riskPercent: 1,
+        reasons: ["Reaction-high room is unavailable"],
+        policyVersion: "execution-v1",
+      },
+    });
+    const { response, rows } = await exportedRows([
+      { symbol: buy.symbol, status: "BUY", recommendation: buy },
+    ]);
+
+    expect(response.status).toBe(200);
+    expect(rows[0]).toEqual(expect.objectContaining({
+      symbol: "ACME",
+      executionStatus: "INSUFFICIENT_ROOM",
+    }));
+  });
+
   it.each(["=SUM(A1:A2)", "  +cmd", "\t-2+3", " @evil"])(
     "neutralizes spreadsheet formula cell %j after leading whitespace",
     async (symbol) => {
