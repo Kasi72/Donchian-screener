@@ -112,7 +112,7 @@ const recommendationSchema = z.object({
   timeframe: z.enum(["5m", "15m", "1h", "1d", "1wk", "1mo"]),
   signalTime: z.number().finite(),
   autoPeriod: z.number().int().positive(),
-  probability: z.null(),
+  probability: z.number().finite().min(0).max(1).nullable(),
   signalTier: z.enum(["CONFIRMED_REVERSAL", "DEVELOPING_REVERSAL", "EARLY_CANDIDATE"]).optional(),
   tierScore: z.number().finite().min(0).max(100).optional(),
   entryReadiness: z.enum(["WAIT_NEXT_OPEN", "REVIEW_RISK", "SKIP"]).optional(),

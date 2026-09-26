@@ -113,6 +113,7 @@ export function ScanResults({
   const [previousResults, setPreviousResults] = useState(results);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const topScrollRef = useRef<HTMLDivElement>(null);
+  const topScrollContentRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
 
   if (results !== previousResults) {
@@ -151,6 +152,27 @@ export function ScanResults({
       selected: selectedResults,
     });
   }, [onProjectionChange, projectedResults, selectedResults]);
+
+  useEffect(() => {
+    const updateTopScrollWidth = () => {
+      const tableScroll = tableScrollRef.current;
+      const topContent = topScrollContentRef.current;
+      if (!tableScroll || !topContent) return;
+      topContent.style.width = `${Math.max(tableScroll.scrollWidth, tableScroll.clientWidth)}px`;
+    };
+
+    updateTopScrollWidth();
+    const tableScroll = tableScrollRef.current;
+    const observer = typeof ResizeObserver === "undefined" || !tableScroll
+      ? undefined
+      : new ResizeObserver(updateTopScrollWidth);
+    if (observer && tableScroll) observer.observe(tableScroll);
+    window.addEventListener("resize", updateTopScrollWidth);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateTopScrollWidth);
+    };
+  }, [detailsRowId, projectedResults.length]);
 
   function setFilterValue(field: keyof TableFilters, value: string) {
     setFilters((current) => ({ ...current, [field]: value }));
@@ -322,7 +344,7 @@ export function ScanResults({
         aria-label="Top horizontal scroll for scan results"
         onScroll={(event) => syncHorizontalScroll(event.currentTarget, tableScrollRef.current)}
       >
-        <div className="table-top-scroll__content" aria-hidden="true" />
+        <div ref={topScrollContentRef} className="table-top-scroll__content" aria-hidden="true" />
       </div>
       <div
         ref={tableScrollRef}

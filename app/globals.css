@@ -626,12 +626,19 @@ select:disabled {
   margin-bottom: 6px;
   border: 1px solid var(--border);
   background: var(--surface-elevated);
+  min-height: 22px;
 }
 
 .table-top-scroll__content {
-  width: 1480px;
-  height: 12px;
+  width: 1714px;
+  min-width: 100%;
+  height: 16px;
 }
+
+.table-top-scroll::-webkit-scrollbar { height: 12px; }
+.table-top-scroll::-webkit-scrollbar-track { background: var(--surface); border-radius: 999px; }
+.table-top-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border: 2px solid var(--surface); border-radius: 999px; }
+.table-top-scroll::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
 .table-scroll {
   border-top: 1px solid var(--border-strong);
