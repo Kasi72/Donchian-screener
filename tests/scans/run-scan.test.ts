@@ -509,6 +509,20 @@ describe("scan CSV export", () => {
     ]);
   });
 
+  it("exports BUY rows when reaction-high room is unavailable", async () => {
+    const buy = recommendation({ reactionHigh: null, rewardRisk: null });
+    const { response, rows } = await exportedRows([
+      { symbol: buy.symbol, status: "BUY", recommendation: buy },
+    ]);
+
+    expect(response.status).toBe(200);
+    expect(rows[0]).toEqual(expect.objectContaining({
+      symbol: "ACME",
+      reactionHigh: "",
+      rewardRisk: "",
+    }));
+  });
+
   it.each(["=SUM(A1:A2)", "  +cmd", "\t-2+3", " @evil"])(
     "neutralizes spreadsheet formula cell %j after leading whitespace",
     async (symbol) => {
