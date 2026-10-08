@@ -1,9 +1,11 @@
 import "server-only";
+import { createHash } from "node:crypto";
 
 import YahooFinance from "yahoo-finance2";
 
 import { normalizeCandles, type YahooCandle } from "./normalize-candles";
-import { latestExpectedNseCompletion } from "./nse-session";
+import { latestExpectedNseCompletion, nseCandleEligibility } from "./nse-session";
+import { aggregateCompletedDailyCandles } from "./aggregate-candles";
 import {
   BoundedCandleCache,
   GLOBAL_CANDLE_CACHE,
@@ -28,7 +30,13 @@ export interface YahooChartClient {
       includePrePost: false;
     },
     moduleOptions?: { fetchOptions: { signal: AbortSignal } },
-  ): Promise<{ quotes: YahooCandle[] }>;
+  ): Promise<{
+    quotes: YahooCandle[];
+    meta?: {
+      regularMarketTime?: Date | string | number;
+      regularMarketPrice?: number;
+    };
+  }>;
 }
 
 export interface YahooMarketDataProviderOptions {
@@ -128,6 +136,37 @@ function effectiveSignal(options: MarketDataRequestOptions | undefined): AbortSi
   return signals.length === 1 ? signals[0] : AbortSignal.any(signals);
 }
 
+function repairCompletedDailySnapshot(
+  quotes: YahooCandle[],
+  meta: { regularMarketTime?: Date | string | number; regularMarketPrice?: number } | undefined,
+  timeframe: Timeframe,
+): YahooCandle[] {
+  if (timeframe !== "1d" || quotes.length === 0) return quotes;
+  const marketTime = meta?.regularMarketTime === undefined
+    ? NaN
+    : new Date(meta.regularMarketTime).getTime();
+  const marketPrice = meta?.regularMarketPrice;
+  if (!Number.isFinite(marketTime) || typeof marketPrice !== "number" || !Number.isFinite(marketPrice)) {
+    return quotes;
+  }
+  const latest = quotes.reduce<YahooCandle | undefined>((current, quote) => {
+    const time = new Date(quote.date).getTime();
+    if (!Number.isFinite(time)) return current;
+    return current === undefined || time > new Date(current.date).getTime() ? quote : current;
+  }, undefined);
+  if (latest === undefined || latest.close !== null && latest.close !== undefined) return quotes;
+  const latestTime = new Date(latest.date).getTime();
+  const marketSessionComplete = nseCandleEligibility(latestTime, timeframe, new Date(marketTime)) === "COMPLETE";
+  if (!marketSessionComplete || marketPrice < (latest.low ?? -Infinity) || marketPrice > (latest.high ?? Infinity)) {
+    return quotes;
+  }
+  return quotes.map((quote) =>
+    quote === latest
+      ? { ...quote, close: marketPrice, adjclose: quote.adjclose ?? marketPrice }
+      : quote,
+  );
+}
+
 export class YahooMarketDataProvider implements MarketDataProvider {
   private readonly client: YahooChartClient;
   private readonly maxAttempts: number;
@@ -161,10 +200,11 @@ export class YahooMarketDataProvider implements MarketDataProvider {
     if (cached !== undefined) return cached;
     const signal = effectiveSignal(requestOptions);
     if (signal.aborted) throw signal.reason;
+    const sourceTimeframe: Timeframe = timeframe === "1wk" || timeframe === "1mo" ? "1d" : timeframe;
     const options = {
       period1: new Date(now.getTime() - LOOKBACK_MS[timeframe]),
       period2: now,
-      interval: timeframe,
+      interval: sourceTimeframe,
       includePrePost: false as const,
     };
 
@@ -175,13 +215,39 @@ export class YahooMarketDataProvider implements MarketDataProvider {
           () => this.client.chart(symbol, options, { fetchOptions: { signal } }),
           signal,
         );
-        const normalized = normalizeCandles(result.quotes, timeframe, now, {
+        const source = normalizeCandles(
+          repairCompletedDailySnapshot(result.quotes, result.meta, sourceTimeframe),
+          sourceTimeframe,
+          now,
+          {
           adjustmentMode,
-        });
-        if (normalized.status !== "PROVIDER_RATE_LIMITED") {
-          this.cache?.set(cacheKey, normalized);
+          },
+        );
+        const normalized: CandleResponse = timeframe === sourceTimeframe
+          ? source
+          : source.status === "OK" || source.status === "INSUFFICIENT_HISTORY"
+            ? (() => {
+                const candles = aggregateCompletedDailyCandles(source.candles, timeframe as Extract<Timeframe, "1wk" | "1mo">, now);
+                return {
+                  status: candles.length < 100 ? "INSUFFICIENT_HISTORY" as const : "OK" as const,
+                  candles,
+                  asOf: candles.at(-1)?.time ?? 0,
+                  adjustmentMode,
+                };
+              })()
+            : source;
+        const response: CandleResponse = {
+          ...normalized,
+          provenance: {
+            providerId: "yahoo-chart-v1",
+            snapshotHash: createHash("sha256").update(JSON.stringify({ symbol, timeframe, adjustmentMode, candles: normalized.candles })).digest("hex"),
+            consensus: "SINGLE_SOURCE",
+          },
+        };
+        if (response.status !== "PROVIDER_RATE_LIMITED") {
+          this.cache?.set(cacheKey, response);
         }
-        return normalized;
+        return response;
       } catch (error) {
         if (signal.aborted) throw signal.reason ?? error;
         if (isSymbolNotFound(error)) {

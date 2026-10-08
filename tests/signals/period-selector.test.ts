@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Candle } from "@/lib/market/provider";
 import {
+  auditPeriodNeighborhood,
+  isExactPeriodCandidate,
+  isUniquePeriodSelection,
   selectHighestPeriodCandidate,
+  selectStablePeriodCandidate,
   selectRulesPeriod,
   structuralScore,
   type PeriodCandidate,
@@ -20,9 +24,8 @@ function candle(
 function candidateFixture(): Candle[] {
   const candles = Array.from({ length: 31 }, (_, index) => candle(index));
 
-  // Both anchors are fully confirmed before t=30. The sub-tick raw rise from
-  // the newer anchor to the signal permits both anchored periods to satisfy
-  // the exact rollover rule without scanning unrelated integer periods.
+  // Both anchors are fully confirmed before t=30. The newer candidate is
+  // deliberately sub-tick and must be rejected by the tradable-tick gate.
   candles[16] = candle(16, 90, 110, 100, 2_000);
   candles[17] = candle(17, 108, 114, 112);
   candles[18] = candle(18, 109, 116, 114);
@@ -34,6 +37,41 @@ function candidateFixture(): Candle[] {
 }
 
 describe("rules period selection", () => {
+  it("marks a period as uniquely valid only when no competing candidate exists", () => {
+    const result = selectRulesPeriod(candidateFixture(), 30, 0.05);
+    expect(isUniquePeriodSelection(result.candidates)).toBe(true);
+    expect(isUniquePeriodSelection([...result.candidates, { ...result.selected!, period: 15 }])).toBe(false);
+  });
+
+  it("audits the selected period and its N±2 neighbours", () => {
+    const candles = candidateFixture();
+    const result = selectRulesPeriod(candles, 30, 0.05);
+    const audit = auditPeriodNeighborhood(candles, 30, result.selected!.period, 0.05);
+
+    expect(audit.map(({ period }) => period)).toEqual([12, 13, 14, 15, 16]);
+    expect(audit.find(({ period }) => period === 14)).toMatchObject({
+      valid: true,
+      touchPassed: true,
+      rolloverPassed: true,
+    });
+  });
+
+  it("rejects a candidate whose period does not reproduce both Donchian windows", () => {
+    const candles = candidateFixture();
+    const result = selectRulesPeriod(candles, 30, 0.05);
+    const selected = result.selected!;
+
+    expect(isExactPeriodCandidate(candles, 30, selected, 0.05)).toBe(true);
+    expect(
+      isExactPeriodCandidate(
+        candles,
+        30,
+        { ...selected, period: selected.period + 1 },
+        0.05,
+      ),
+    ).toBe(false);
+  });
+
   it("freezes the exact structural-v1 score for a hand-calculated fixture", () => {
     const candles = Array.from({ length: 21 }, (_, index) =>
       candle(index, 99, 101, 100, index === 14 ? 200 : 100),
@@ -82,16 +120,12 @@ describe("rules period selection", () => {
     );
   });
 
-  it("selects the candidate with the highest frozen structural score", () => {
+  it("selects the only candidate with a tradable-tick rollover", () => {
     const result = selectRulesPeriod(candidateFixture(), 30, 0.05);
 
     expect(result.candidates.map((candidate) => candidate.anchor.index)).toEqual([
       16,
-      22,
     ]);
-    expect(result.candidates[0].score).toBeGreaterThan(
-      result.candidates[1].score,
-    );
     expect(result.selected?.anchor.index).toBe(16);
     expect(result.selected?.score).toBe(result.candidates[0].score);
     expect(result.selected).toMatchObject({
@@ -152,4 +186,50 @@ describe("rules period selection", () => {
         ?.anchor.index,
     ).toBe(20);
   });
+
+  it("does not rank by impossible neighbouring-period agreement", () => {
+    const candidates: PeriodCandidate[] = [
+      {
+        ...candidateFixtureCandidate(40),
+        score: 0.9,
+      },
+      {
+        ...candidateFixtureCandidate(41),
+        score: 0.7,
+      },
+    ];
+
+    expect(
+      selectStablePeriodCandidate(candidates, [
+        { period: 40, validNeighborCount: 2, neighborhoodSize: 5, stabilityScore: 0.4 },
+        { period: 41, validNeighborCount: 4, neighborhoodSize: 5, stabilityScore: 0.8 },
+      ])?.period,
+    ).toBe(40);
+  });
 });
+
+function candidateFixtureCandidate(period: number): PeriodCandidate {
+  return {
+    anchor: {
+      index: 30 - period,
+      time: period,
+      low: 90,
+      prominenceAtr: 1,
+      recoveryAtr: 1,
+      confirmedAt: 32 - period,
+    },
+    period,
+    score: 0.5,
+    scoreVersion: "structural-v1",
+    scoreComponents: {
+      prominence: 0.5,
+      recovery: 0.5,
+      recency: 0.5,
+      retests: 0,
+      relativeVolume: 0.5,
+      higherTimeframeAgreement: 0,
+    },
+    currentLdc: 100,
+    previousLdc: 90,
+  };
+}

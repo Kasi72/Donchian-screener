@@ -22,6 +22,7 @@ const STATUS_LABELS: Record<ScanItemResult["status"], string> = {
   STALE_DATA: "Market data is stale",
   INVALID_CANDLES: "Market data could not be validated",
   PROVIDER_ERROR: "Market data provider error",
+  CALCULATION_ERROR: "Signal calculation failed",
   DATA_QUALITY_LIMITATION: "Market data calendar or adjustment coverage is limited",
   PROVIDER_TIMEOUT: "Market data request timed out",
   INVALID_INSTRUMENT: "Instrument is not supported",
@@ -44,6 +45,11 @@ const priceFormatter = new Intl.NumberFormat("en-IN", {
 const COLUMNS: Array<{ column: ResultColumn; label: string; numeric?: boolean }> = [
   { column: "symbol", label: "Instrument" },
   { column: "status", label: "Status" },
+  { column: "tier", label: "Trade tier" },
+  { column: "signalState", label: "Signal state" },
+  { column: "confirmation", label: "Reversal confirmation" },
+  { column: "tierScore", label: "Tier score", numeric: true },
+  { column: "entryReadiness", label: "Entry readiness" },
   { column: "entry", label: "Entry reference", numeric: true },
   { column: "stop", label: "Stop", numeric: true },
   { column: "target1", label: "Target 1", numeric: true },
@@ -66,6 +72,15 @@ function formatPrice(value: number | undefined): string {
 
 function statusText(result: ScanItemResult): string {
   return result.message ?? STATUS_LABELS[result.status];
+}
+
+function signalStateText(result: ScanItemResult): string {
+  return result.recommendation?.signalState ?? result.recommendation?.sequentialEvidence?.state ?? "—";
+}
+
+function confirmationText(result: ScanItemResult): string {
+  const confirmation = result.recommendation?.confirmation;
+  return confirmation ? `${confirmation.grade} (${confirmation.score.toFixed(2)}/100)` : "—";
 }
 
 function sortLabel(sort: SortState | null, column: ResultColumn): "ascending" | "descending" | undefined {
@@ -97,6 +112,9 @@ export function ScanResults({
   const [detailsRowId, setDetailsRowId] = useState<string>();
   const [previousResults, setPreviousResults] = useState(results);
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const topScrollContentRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
 
   if (results !== previousResults) {
     const validIds = new Set(results.map((result, index) => rowId(result, index)));
@@ -135,6 +153,27 @@ export function ScanResults({
     });
   }, [onProjectionChange, projectedResults, selectedResults]);
 
+  useEffect(() => {
+    const updateTopScrollWidth = () => {
+      const tableScroll = tableScrollRef.current;
+      const topContent = topScrollContentRef.current;
+      if (!tableScroll || !topContent) return;
+      topContent.style.width = `${Math.max(tableScroll.scrollWidth, tableScroll.clientWidth)}px`;
+    };
+
+    updateTopScrollWidth();
+    const tableScroll = tableScrollRef.current;
+    const observer = typeof ResizeObserver === "undefined" || !tableScroll
+      ? undefined
+      : new ResizeObserver(updateTopScrollWidth);
+    if (observer && tableScroll) observer.observe(tableScroll);
+    window.addEventListener("resize", updateTopScrollWidth);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateTopScrollWidth);
+    };
+  }, [detailsRowId, projectedResults.length]);
+
   function setFilterValue(field: keyof TableFilters, value: string) {
     setFilters((current) => ({ ...current, [field]: value }));
   }
@@ -172,6 +211,12 @@ export function ScanResults({
     });
   }
 
+  function syncHorizontalScroll(source: HTMLDivElement, target: HTMLDivElement | null): void {
+    if (target && target.scrollLeft !== source.scrollLeft) {
+      target.scrollLeft = source.scrollLeft;
+    }
+  }
+
   return (
     <div className="results-table">
       <section className="results-toolbar" aria-label="Filter scan results">
@@ -191,6 +236,44 @@ export function ScanResults({
             type="search"
             value={filters.status ?? ""}
             onChange={(event) => setFilterValue("status", event.target.value)}
+          />
+        </div>
+        <div className="toolbar-field">
+          <label htmlFor="filter-tier">Trade tier filter</label>
+          <input
+            id="filter-tier"
+            type="search"
+            placeholder="confirmed, developing, early"
+            value={filters.tier ?? ""}
+            onChange={(event) => setFilterValue("tier", event.target.value)}
+          />
+        </div>
+        <div className="toolbar-field">
+          <label htmlFor="filter-signal-state">Signal state filter</label>
+          <input
+            id="filter-signal-state"
+            type="search"
+            value={filters.signalState ?? ""}
+            onChange={(event) => setFilterValue("signalState", event.target.value)}
+          />
+        </div>
+        <div className="toolbar-field">
+          <label htmlFor="filter-readiness">Entry readiness filter</label>
+          <input
+            id="filter-readiness"
+            type="search"
+            placeholder="wait, review, skip"
+            value={filters.entryReadiness ?? ""}
+            onChange={(event) => setFilterValue("entryReadiness", event.target.value)}
+          />
+        </div>
+        <div className="toolbar-field">
+          <label htmlFor="filter-confirmation">Reversal confirmation filter</label>
+          <input
+            id="filter-confirmation"
+            type="search"
+            value={filters.confirmation ?? ""}
+            onChange={(event) => setFilterValue("confirmation", event.target.value)}
           />
         </div>
         {NUMERIC_FILTERS.map(({ min, max, label }) => (
@@ -217,6 +300,16 @@ export function ScanResults({
         ))}
         <div className="toolbar-range">
           <label>
+            Minimum tier score
+            <input type="number" min="0" max="100" inputMode="decimal" value={String(filters.minTierScore ?? "")} onChange={(event) => setFilterValue("minTierScore", event.target.value)} />
+          </label>
+          <label>
+            Maximum tier score
+            <input type="number" min="0" max="100" inputMode="decimal" value={String(filters.maxTierScore ?? "")} onChange={(event) => setFilterValue("maxTierScore", event.target.value)} />
+          </label>
+        </div>
+        <div className="toolbar-range">
+          <label>
             Data as of from
             <input
               type="date"
@@ -233,15 +326,34 @@ export function ScanResults({
             />
           </label>
         </div>
-        <button className="table-action" type="button" onClick={() => setFilters({})}>Clear table filters</button>
-        <p className="table-count" aria-live="polite">
-          {projectedResults.length === 0 ? "No results match these table filters" : `${projectedResults.length} result${projectedResults.length === 1 ? "" : "s"} visible`}
-        </p>
-        <p className="table-count" aria-live="polite">{selectedResults.length} selected</p>
-        <button className="table-action" type="button" onClick={() => setSelectedIds(new Set())}>Clear selection</button>
+        <div className="toolbar-actions" aria-label="Table filter actions">
+          <button className="table-action" type="button" onClick={() => setFilters({})}>Clear table filters</button>
+          <p className="table-count" aria-live="polite">
+            {projectedResults.length === 0 ? "No results match these table filters" : `${projectedResults.length} result${projectedResults.length === 1 ? "" : "s"} visible`}
+          </p>
+          <p className="table-count" aria-live="polite">{selectedResults.length} selected</p>
+          <button className="table-action" type="button" onClick={() => setSelectedIds(new Set())}>Clear selection</button>
+        </div>
       </section>
 
-      <div className="table-scroll" role="region" tabIndex={0} aria-label="Scrollable scan results">
+      <div
+        ref={topScrollRef}
+        className="table-top-scroll"
+        role="region"
+        tabIndex={0}
+        aria-label="Top horizontal scroll for scan results"
+        onScroll={(event) => syncHorizontalScroll(event.currentTarget, tableScrollRef.current)}
+      >
+        <div ref={topScrollContentRef} className="table-top-scroll__content" aria-hidden="true" />
+      </div>
+      <div
+        ref={tableScrollRef}
+        className="table-scroll"
+        role="region"
+        tabIndex={0}
+        aria-label="Scrollable scan results"
+        onScroll={(event) => syncHorizontalScroll(event.currentTarget, topScrollRef.current)}
+      >
         <table aria-label="Scan results">
           <thead>
             <tr>
@@ -257,13 +369,13 @@ export function ScanResults({
                 </label>
               </th>
               {COLUMNS.map(({ column, label, numeric }) => (
-                <th key={column} scope="col" className={`${column === "symbol" ? "instrument-column" : ""}${numeric ? " number-cell" : ""}`} aria-sort={sortLabel(sort, column)}>
-                  <button className="sort-button" type="button" onClick={() => toggleSort(column)} aria-label={`Sort by ${label}`}>
+                <th key={column} scope="col" className={`${column === "symbol" ? "instrument-column" : ""}${numeric ? " number-cell" : ""}${column === "signalState" || column === "tier" || column === "entryReadiness" ? " signal-state-column" : ""}${column === "confirmation" ? " confirmation-column" : ""}`} aria-sort={sortLabel(sort, column)}>
+                  <button className={`sort-button${column === "signalState" || column === "tier" || column === "confirmation" || column === "entryReadiness" ? " sort-button--wrap" : ""}`} type="button" onClick={() => toggleSort(column)} aria-label={`Sort by ${label}`}>
                     {label} {sort?.column === column ? (sort.direction === "asc" ? "↑" : "↓") : null}
                   </button>
                 </th>
               ))}
-              <th scope="col" aria-label="Calculation details" />
+              <th scope="col" className="details-column" aria-label="Calculation details" />
             </tr>
           </thead>
           <tbody>
@@ -289,17 +401,30 @@ export function ScanResults({
                     </td>
                     <th scope="row" className="instrument-column">{result.symbol}</th>
                     <td className={result.status === "BUY" ? "buy-status" : "status-copy"}>{statusText(result)}</td>
+                    <td className={`table-tier table-tier--${result.recommendation?.signalTier?.toLowerCase() ?? "none"}`}>
+                      {result.recommendation?.signalTier?.replaceAll("_", " ") ?? "—"}
+                    </td>
+                    <td className={`table-signal-state table-signal-state--${signalStateText(result).toLowerCase()}`}>
+                      {signalStateText(result).replaceAll("_", " ")}
+                    </td>
+                    <td className={`table-confirmation table-confirmation--${result.recommendation?.confirmation?.grade?.toLowerCase() ?? "none"}`}>
+                      {confirmationText(result)}
+                    </td>
+                    <td className="number-cell">{result.recommendation?.tierScore?.toFixed(1) ?? "—"}</td>
+                    <td className={`table-readiness table-readiness--${result.recommendation?.entryReadiness?.toLowerCase() ?? "none"}`}>
+                      {result.recommendation?.entryReadiness?.replaceAll("_", " ") ?? "—"}
+                    </td>
                     <td className="number-cell">{formatPrice(recommendation?.entry)}</td>
                     <td className="number-cell">{formatPrice(recommendation?.stop)}</td>
                     <td className="number-cell">{formatPrice(recommendation?.target1)}</td>
                     <td className="number-cell">{formatPrice(recommendation?.target2)}</td>
                     <td className="number-cell">{recommendation?.autoPeriod ?? "—"}</td>
-                    <td>
+                    <td className="data-as-of-column">
                       {recommendation ? (
                         <time dateTime={new Date(recommendation.dataAsOf).toISOString()}>{dateFormatter.format(recommendation.dataAsOf)}</time>
                       ) : "—"}
                     </td>
-                    <td>
+                    <td className="details-column">
                       {recommendation ? (
                         <button
                           id={triggerId}

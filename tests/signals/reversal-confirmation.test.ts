@@ -28,7 +28,7 @@ describe("calculateReversalConfirmation", () => {
 
     const result = calculateReversalConfirmation(history, 39, 10, 90, 0.05);
 
-    expect(result.version).toBe("confirmation-v1");
+    expect(result.version).toBe("confirmation-v2");
     expect(result.score).toBeGreaterThanOrEqual(60);
     expect(result.closeLocation).toBeCloseTo(11 / 13, 6);
     expect(result.lowerWickRatio).toBeCloseTo(6 / 13, 6);
@@ -52,16 +52,57 @@ describe("calculateReversalConfirmation", () => {
     expect(withFuture).toEqual(base);
   });
 
-  it("reports period stability instead of treating one arbitrary length as certainty", () => {
+  it("audits the unique qualifying period without penalizing its evidence score", () => {
     const history = candles();
     history[29] = { time: 29, open: 86, high: 88, low: 80, close: 84, volume: 1_000 };
     history[39] = { time: 39, open: 96, high: 103, low: 90, close: 101, volume: 3_000 };
 
     const result = calculateReversalConfirmation(history, 39, 10, 90, 0.05);
 
-    expect(result.validPeriodCount).toBeGreaterThanOrEqual(1);
+    expect(result.validPeriodCount).toBe(1);
+    // Changing only the audit window must not change candle evidence.
+    const other = calculateReversalConfirmation(history, 39, 5, 90, 0.05);
+    expect(other.validPeriodCount).toBe(0);
+    expect(other.score).toBe(result.score);
     expect(result.validPeriodRange[0]).toBeLessThanOrEqual(10);
     expect(result.validPeriodRange[1]).toBeGreaterThanOrEqual(10);
     expect(result.reasons.length).toBeGreaterThan(0);
+  });
+
+  it("uses the same N±2 stability neighborhood as the period selector", () => {
+    const history = candles();
+    const result = calculateReversalConfirmation(history, 39, 10, 90, 0.05);
+
+    expect(result.validPeriodRange[0]).toBeGreaterThanOrEqual(8);
+    expect(result.validPeriodRange[1]).toBeLessThanOrEqual(12);
+  });
+
+  it("compares channel touches on exchange ticks, not binary price decimals", () => {
+    const history = candles();
+    history[39] = {
+      time: 39,
+      open: 96,
+      high: 103,
+      low: 90.02,
+      close: 101,
+      volume: 3_000,
+    };
+
+    const result = calculateReversalConfirmation(history, 39, 10, 90.01, 0.05);
+
+    expect(result.reasons).toContain("signal low is aligned with the selected lower channel");
+  });
+
+  it("detects a robust recent positive location shift when baseline MAD is zero", () => {
+    let close = 100;
+    const history = [...Array.from({ length: 24 }, () => -0.004), ...Array.from({ length: 8 }, () => 0.012)].map((ret, index) => {
+      const open = close;
+      close *= Math.exp(ret);
+      return { time: index, open, high: Math.max(open, close) + 1, low: Math.min(open, close) - 1, close, volume: 1_000 };
+    });
+
+    const result = calculateReversalConfirmation(history, history.length - 1, 5, history.at(-1)!.low, 0.05);
+
+    expect(result.changePointScore).toBeGreaterThan(0.75);
   });
 });

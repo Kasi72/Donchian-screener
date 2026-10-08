@@ -2,6 +2,7 @@ import type { Candle } from "@/lib/market/provider";
 import { atrAt } from "./atr";
 import { bullishRollover } from "./donchian";
 import { findConfirmedPivotLows, type PivotLow } from "./pivots";
+import { priceToTicks } from "./ticks";
 import {
   ATR_PERIOD,
   STRUCTURAL_SCORE_CONFIG,
@@ -18,6 +19,25 @@ export interface PeriodCandidate {
   previousLdc: number;
 }
 
+export interface PeriodAudit {
+  period: number;
+  currentLdc: number | null;
+  previousLdc: number | null;
+  currentLdcTick: number | null;
+  previousLdcTick: number | null;
+  signalLowTick: number | null;
+  touchPassed: boolean;
+  rolloverPassed: boolean;
+  valid: boolean;
+}
+
+export interface PeriodStability {
+  period: number;
+  validNeighborCount: number;
+  neighborhoodSize: number;
+  stabilityScore: number;
+}
+
 export interface StructuralScoreComponents {
   prominence: number;
   recovery: number;
@@ -32,6 +52,8 @@ export interface StructuralScore {
   score: number;
   components: StructuralScoreComponents;
 }
+
+export const PERIOD_STABILITY_RADIUS = 2 as const;
 
 function clampUnit(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -160,11 +182,127 @@ export function selectHighestPeriodCandidate(
   return selected;
 }
 
+/**
+ * Compatibility wrapper. Neighbour counts cannot rank exact rollover periods.
+ */
+export function selectStablePeriodCandidate(
+  candidates: PeriodCandidate[],
+  stability: PeriodStability[],
+): PeriodCandidate | undefined {
+  void stability;
+  return selectHighestPeriodCandidate(candidates);
+}
+
+function periodStability(
+  candles: Candle[],
+  signalIndex: number,
+  period: number,
+  tickSize: number,
+  radius = PERIOD_STABILITY_RADIUS,
+): PeriodStability {
+  const audits = auditPeriodNeighborhood(candles, signalIndex, period, tickSize, radius);
+  const validNeighborCount = audits.filter((audit) => audit.valid).length;
+  const neighborhoodSize = audits.length;
+  return {
+    period,
+    validNeighborCount,
+    neighborhoodSize,
+    stabilityScore: neighborhoodSize === 0 ? 0 : validNeighborCount / neighborhoodSize,
+  };
+}
+
+export function isUniquePeriodSelection(candidates: PeriodCandidate[]): boolean {
+  return candidates.length === 1;
+}
+
+export function auditPeriodNeighborhood(
+  candles: Candle[],
+  signalIndex: number,
+  selectedPeriod: number,
+  tickSize: number,
+  radius = 2,
+): PeriodAudit[] {
+  if (!Number.isInteger(selectedPeriod) || selectedPeriod <= 0) return [];
+  const signalLowTick =
+    signalIndex >= 0 && signalIndex < candles.length
+      ? priceToTicks(candles[signalIndex].low, tickSize)
+      : null;
+  const audits: PeriodAudit[] = [];
+  for (
+    let period = Math.max(1, selectedPeriod - Math.max(0, Math.floor(radius)));
+    period <= selectedPeriod + Math.max(0, Math.floor(radius));
+    period += 1
+  ) {
+    try {
+      const rollover = bullishRollover(candles, signalIndex, period, tickSize);
+      const currentLdcTick = priceToTicks(rollover.currentLdc, tickSize);
+      const previousLdcTick = priceToTicks(rollover.previousLdc, tickSize);
+      const touchPassed = signalLowTick !== null && signalLowTick === currentLdcTick;
+      const rolloverPassed = currentLdcTick > previousLdcTick;
+      audits.push({
+        period,
+        currentLdc: rollover.currentLdc,
+        previousLdc: rollover.previousLdc,
+        currentLdcTick,
+        previousLdcTick,
+        signalLowTick,
+        touchPassed,
+        rolloverPassed,
+        valid: touchPassed && rolloverPassed,
+      });
+    } catch {
+      audits.push({
+        period,
+        currentLdc: null,
+        previousLdc: null,
+        currentLdcTick: null,
+        previousLdcTick: null,
+        signalLowTick,
+        touchPassed: false,
+        rolloverPassed: false,
+        valid: false,
+      });
+    }
+  }
+  return audits;
+}
+
+/**
+ * Defense-in-depth check for the exact period/window contract exported to users.
+ * A candidate is valid only when recomputing its period reproduces both
+ * Donchian windows and the tick-normalized rollover gate at the signal bar.
+ */
+export function isExactPeriodCandidate(
+  candles: Candle[],
+  signalIndex: number,
+  candidate: PeriodCandidate,
+  tickSize: number,
+): boolean {
+  if (!Number.isInteger(candidate.period) || candidate.period <= 0) {
+    return false;
+  }
+  try {
+    const rollover = bullishRollover(
+      candles,
+      signalIndex,
+      candidate.period,
+      tickSize,
+    );
+    return (
+      rollover.passed &&
+      priceToTicks(rollover.currentLdc, tickSize) === priceToTicks(candidate.currentLdc, tickSize) &&
+      priceToTicks(rollover.previousLdc, tickSize) === priceToTicks(candidate.previousLdc, tickSize)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function selectRulesPeriod(
   candles: Candle[],
   signalIndex: number,
   tickSize: number,
-): { selected?: PeriodCandidate; candidates: PeriodCandidate[] } {
+): { selected?: PeriodCandidate; candidates: PeriodCandidate[]; stability: PeriodStability[] } {
   const anchors = findConfirmedPivotLows(candles, signalIndex);
   const candidates: PeriodCandidate[] = [];
 
@@ -187,7 +325,12 @@ export function selectRulesPeriod(
     });
   }
 
+  const stability = candidates.map((candidate) =>
+    periodStability(candles, signalIndex, candidate.period, tickSize),
+  );
+  // Exact touch and rollover have a unique qualifying period. Keep the
+  // neighbourhood for audit only; it cannot measure predictive stability.
   const selected = selectHighestPeriodCandidate(candidates);
 
-  return selected === undefined ? { candidates } : { selected, candidates };
+  return selected === undefined ? { candidates, stability } : { selected, candidates, stability };
 }

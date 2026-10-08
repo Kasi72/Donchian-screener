@@ -71,11 +71,14 @@ describe("trade levels", () => {
     );
   });
 
-  it("rejects a setup when the highest causally confirmed reaction high is below Target1", () => {
+  it("preserves deterministic trade levels when reaction-high room is below Target1", () => {
     const candles = levelsFixture();
     candles[10] = candle(10, 102.2, 100.2, 101.2);
 
-    expect(calculateTradeLevels(candles, 17, 0, 0.05)).toBeNull();
+    const levels = calculateTradeLevels(candles, 17, 0, 0.05);
+    expect(levels).not.toBeNull();
+    expect(levels?.reactionHigh).toBe(102.2);
+    expect(levels?.hasTarget1Room).toBe(false);
   });
 
   it("rejects zero or negative risk", () => {
@@ -85,12 +88,16 @@ describe("trade levels", () => {
     expect(calculateTradeLevels(candles, 17, 0, 0.05)).toBeNull();
   });
 
-  it("ignores an unconfirmed high immediately before the signal and all future highs", () => {
+  it("does not invent a reaction high from an unconfirmed or future high", () => {
     const candles = levelsFixture();
-    candles[10] = candle(10, 102.2, 100.2, 101.2);
+    candles[10] = candle(10, 102.03, 100.2, 101.2);
     candles[16] = candle(16, 500, 100.03, 101.03);
     candles.push(candle(18, 1_000, 100.03, 101.03));
 
-    expect(calculateTradeLevels(candles, 17, 0, 0.05)).toBeNull();
+    const levels = calculateTradeLevels(candles, 17, 0, 0.05);
+    expect(levels).not.toBeNull();
+    expect(levels?.reactionHigh).toBeNull();
+    expect(levels?.rewardRisk).toBeNull();
+    expect(levels?.hasTarget1Room).toBe(false);
   });
 });

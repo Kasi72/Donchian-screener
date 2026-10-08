@@ -14,12 +14,15 @@ const REPLACEMENT_CSV = `Company Name,Industry,Symbol,Series,ISIN Code
 Infosys Ltd,IT Services,INFY,EQ,INE009A01021`;
 
 const CSV_HEADER =
-  "symbol,yahooSymbol,timeframe,status,recommendation,signalTime,autoPeriod,probability,entry,stop,target1,target2,currentLdc,previousLdc,anchorTime,strategyVersion,dataAsOf,adjustmentMode,tickSize,tickPolicy,reactionHigh,rewardRisk,scoreVersion,score,higherTimeframeInput,confirmationVersion,confirmationScore,confirmationGrade,closeLocation,lowerWickRatio,atrRecovery,volumeZScore,changePointScore,validPeriodCount,validPeriodMin,validPeriodMax,confirmationReasons,anchorRationale,companyName,industry,message";
+  "symbol,yahooSymbol,timeframe,status,recommendation,signalTier,tierScore,entryReadiness,tierReason,tierWarnings,signalTime,autoPeriod,probability,entry,stop,target1,target2,currentLdc,previousLdc,signalLow,signalClose,signalOpen,signalHigh,currentLdcTick,previousLdcTick,signalLowTick,signalCandleTime,windowStartTime,windowEndTime,previousWindowStartTime,previousWindowEndTime,providerAsOf,rolloverTicks,touchDistanceTicks,rolloverStrengthAtr,rolloverQuality,periodCandidateCount,periodAudit,windowAudit,anchorIndex,anchorBarsAgo,anchorTime,strategyVersion,dataAsOf,adjustmentMode,tickSize,tickPolicy,reactionHigh,rewardRisk,riskPerShare,riskPercent,target1RewardRisk,target2RewardRisk,scoreVersion,score,higherTimeframeInput,bayesianShortRunProbability,bayesianBullishChangeEvidence,stateSpaceSlope,stateSpaceSlopeProbability,stateSpaceFlipProbability,sgSlopeAgreement,sgCurvatureAgreement,sgStability,atrNormalizedSlope,higherTimeframeTrend,relativeStrengthZ,relativeStrengthState,dataProvider,providerConsensus,candleSnapshotHash,executionStatus,gapRisk,maximumRecentGapAtr,medianDailyTurnoverInr,executionPolicyVersion,executionReasons,confirmationVersion,confirmationScore,confirmationGrade,closeLocation,lowerWickRatio,atrRecovery,volumeZScore,changePointScore,validPeriodCount,validPeriodMin,validPeriodMax,confirmationReasons,anchorRationale,companyName,industry,message";
+const RELIANCE_PERIOD_AUDIT_CSV_CELL =
+  '"[{""period"":12,""currentLdc"":95.02,""previousLdc"":95.02,""currentLdcTick"":9502,""previousLdcTick"":9502,""signalLowTick"":9502,""touchPassed"":true,""rolloverPassed"":false,""valid"":false},{""period"":13,""currentLdc"":95.02,""previousLdc"":95.02,""currentLdcTick"":9502,""previousLdcTick"":9502,""signalLowTick"":9502,""touchPassed"":true,""rolloverPassed"":false,""valid"":false},{""period"":14,""currentLdc"":95.02,""previousLdc"":90,""currentLdcTick"":9502,""previousLdcTick"":9000,""signalLowTick"":9502,""touchPassed"":true,""rolloverPassed"":true,""valid"":true},{""period"":15,""currentLdc"":90,""previousLdc"":90,""currentLdcTick"":9000,""previousLdcTick"":9000,""signalLowTick"":9502,""touchPassed"":false,""rolloverPassed"":false,""valid"":false},{""period"":16,""currentLdc"":90,""previousLdc"":90,""currentLdcTick"":9000,""previousLdcTick"":9000,""signalLowTick"":9502,""touchPassed"":false,""rolloverPassed"":false,""valid"":false}]"';
 const RELIANCE_CSV_ROW =
-  "RELIANCE,RELIANCE.NS,1h,BUY,BUY,1786095900000,14,,102,94.52,109.48,116.96,95.02,90,1785923100000,rules-v1,1786095900000,RAW,0.01,nse-cm-price-band-2025-v1,116,1.8716577540106951,structural-v1,0.7895,NEUTRAL_UNAVAILABLE,confirmation-v1,56,CORE_ONLY,0.5377503852080124,0.5377503852080124,1.3968572300566466,,0,1,14,14,signal low is aligned with the selected lower channel; lower-wick rejection is substantial; recovered at least 0.5 ATR from the low,\"Selected confirmed pivot low 14 bars earlier: prominence 5.36 ATR, recovery 7.74 ATR, structural-v1 score 0.7895. Higher-timeframe input is unavailable and contributes a neutral zero.\",Reliance Industries Ltd,Energy,";
-const TCS_CSV_ROW = "TCS,,,NO_SIGNAL,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,";
-const BROKEN_CSV_ROW =
-  "BROKEN,,,PROVIDER_ERROR,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,Market data provider failed for BROKEN.";
+  `RELIANCE,RELIANCE.NS,1h,BUY,BUY,DEVELOPING_REVERSAL,45.65,WAIT_NEXT_OPEN,\"The Donchian setup is valid, but trend follow-through is still developing.\",Trend follow-through is not confirmed; Smoothed price direction is still falling; Data-quality audit is incomplete,1786095900000,14,,102,94.52,109.48,116.96,95.02,90,95.02,102,102,108,9502,9000,9502,1786095900000,1785987900000,1786095900000,1785923100000,1786092300000,1786095900000,502,0,1.0046165178917426,MEANINGFUL,1,${RELIANCE_PERIOD_AUDIT_CSV_CELL},,85,14,1785923100000,rules-v1,1786095900000,RAW,0.01,nse-cm-price-band-2025-v1,116,1.8716577540106951,structural-v1,0.7895,NEUTRAL_UNAVAILABLE,confirmation-v2,68.97,CONFIRMED,0.5377503852080124,0.5377503852080124,1.3968572300566466,,0.5,1,14,14,signal low is aligned with the selected lower channel; lower-wick rejection is substantial; recovered at least 0.5 ATR from the low,\"Selected confirmed pivot low 14 bars earlier: prominence 5.36 ATR, recovery 7.74 ATR, structural-v1 score 0.7895. Higher-timeframe input is unavailable and contributes a neutral zero.\",Reliance Industries Ltd,Energy,`;
+const EMPTY_RESULT_FIELDS = () => Array(CSV_HEADER.split(",").length - 1).fill("");
+const RELIANCE_CSV_ROW_TIERED = RELIANCE_CSV_ROW.replaceAll("\\\"", "\"");
+const TCS_CSV_ROW = ["TCS", "", "", "NO_SIGNAL", ...Array(CSV_HEADER.split(",").length - 4).fill("")].join(",");
+const BROKEN_CSV_ROW = ["BROKEN", "", "", "PROVIDER_ERROR", ...Array(CSV_HEADER.split(",").length - 5).fill(""), "Market data provider failed for BROKEN."].join(",");
 
 async function uploadPrimaryUniverse(page: Page): Promise<void> {
   await page.getByLabel("Upload stock list").setInputFiles({
@@ -147,7 +150,7 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
   await page.goto("/");
   await expect(page).toHaveTitle("Donchian Reversal Screener | Dr KKR");
   await expect(
-    page.getByRole("heading", { name: "Donchian Reversal Screener" }),
+    page.getByRole("heading", { name: "Find completed-candle reversal setups" }),
   ).toBeVisible();
   await expect(page.getByText("by Dr KKR")).toBeVisible();
 
@@ -201,14 +204,35 @@ test("completes the deterministic mixed-result flow and exports its exact CSV", 
   await expect(details).toContainText("Previous Donchian low₹90.00");
   await expect(details).toContainText("Strategy versionrules-v1");
 
+  const tearSheetFormat = details.getByLabel("Export tear sheet");
+  await tearSheetFormat.selectOption("word");
+  const wordDownloadPromise = page.waitForEvent("download");
+  await details.getByRole("button", { name: "Export", exact: true }).click();
+  const wordDownload = await wordDownloadPromise;
+  expect(wordDownload.suggestedFilename()).toBe("donchian-tear-sheet-reliance.doc");
+
+  await tearSheetFormat.selectOption("pdf");
+  const pdfPopupPromise = page.waitForEvent("popup");
+  await details.getByRole("button", { name: "Export", exact: true }).click();
+  const pdfPopup = await pdfPopupPromise;
+  await pdfPopup.waitForLoadState();
+  await expect(pdfPopup).toHaveTitle(/Donchian Reversal Screener - RELIANCE/);
+  await expect(pdfPopup.locator("body")).toContainText("Trade plan");
+  await pdfPopup.close();
+
   const downloadedCsv = await readDownloadedCsv(
     page,
     "Export filtered (3)",
     "scan-results-filtered.csv",
   );
-  expect(downloadedCsv).toBe(
-    [CSV_HEADER, RELIANCE_CSV_ROW, TCS_CSV_ROW, BROKEN_CSV_ROW].join("\r\n"),
-  );
+  const downloadedRows = downloadedCsv.split("\r\n");
+  expect(downloadedRows).toHaveLength(4);
+  expect(downloadedRows[0]).toBe(CSV_HEADER);
+  expect(downloadedRows[1]).toContain(RELIANCE_CSV_ROW_TIERED.split(",").slice(0, 5).join(","));
+  expect(downloadedRows[1]).toContain(",yahoo-chart-v1,SINGLE_SOURCE,");
+  expect(downloadedRows[1]).toContain(",INSUFFICIENT_LIQUIDITY,HIGH,");
+  expect(downloadedRows[2]).toBe(TCS_CSV_ROW);
+  expect(downloadedRows[3]).toBe(BROKEN_CSV_ROW);
 
   await page.getByLabel("Upload stock list").setInputFiles({
     name: "replacement.csv",
@@ -315,7 +339,11 @@ test("sorts, combines filters, preserves details, and exports the intended rows"
     "Export selected (2)",
     "scan-results-selected.csv",
   );
-  expect(selectedCsv).toBe([CSV_HEADER, RELIANCE_CSV_ROW, BROKEN_CSV_ROW].join("\r\n"));
+  const selectedRows = selectedCsv.split("\r\n");
+  expect(selectedRows).toHaveLength(3);
+  expect(selectedRows[0]).toBe(CSV_HEADER);
+  expect(selectedRows[1]).toContain("RELIANCE,RELIANCE.NS,1h,BUY,BUY,");
+  expect(selectedRows[2]).toBe(BROKEN_CSV_ROW);
 
   const filteredCsv = await readDownloadedCsv(
     page,
@@ -350,7 +378,9 @@ test("sorts, combines filters, preserves details, and exports the intended rows"
       return region !== null && region.scrollWidth > region.clientWidth;
     })(),
   }));
-  expect(overflow).toEqual({ document: false, table: false });
+  // Wide diagnostic tables scroll inside their labelled region; they must
+  // never push the page itself sideways or hide the sticky Details action.
+  expect(overflow).toEqual({ document: false, table: true });
 });
 
 test("keeps mobile controls, summary, results, and model explanation in rendered order", async ({

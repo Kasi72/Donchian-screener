@@ -1,0 +1,9 @@
+{
+  "version": "execution-v1",
+  "maximumHoldingCandles": 10,
+  "exitTarget": "target1",
+  "sameBarPolicy": "stop-first",
+  "wideStopRiskPercent": 5,
+  "minimumMedianDailyTurnoverInr": 100000000,
+  "highGapAtr": 0.5
+}

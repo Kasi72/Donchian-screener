@@ -164,6 +164,51 @@ describe("table state projections", () => {
     expect(symbols(filterResults(rows, { status: "provider failed" }))).toEqual(["Broken"]);
   });
 
+  it("filters signal state and reversal confirmation text", () => {
+    const rows = indexed(
+      buy("CANDIDATE", {
+        signalState: "EARLIEST_CANDIDATE",
+        confirmation: {
+          version: "confirmation-v1",
+          score: 52,
+          grade: "CORE_ONLY",
+          closeLocation: 0.5,
+          lowerWickRatio: 0.5,
+          atrRecovery: 0.5,
+          volumeZScore: null,
+          changePointScore: 0.5,
+          validPeriodCount: 1,
+          validPeriodRange: [40, 40],
+          higherTimeframe: "UNAVAILABLE",
+          relativeStrength: "UNAVAILABLE",
+          reasons: [],
+        },
+      }),
+      buy("CONFIRMED", {
+        signalState: "CONFIRMED_REVERSAL",
+        confirmation: {
+          version: "confirmation-v1",
+          score: 80,
+          grade: "STRONG",
+          closeLocation: 0.9,
+          lowerWickRatio: 0.9,
+          atrRecovery: 2,
+          volumeZScore: 1,
+          changePointScore: 0.9,
+          validPeriodCount: 4,
+          validPeriodRange: [39, 42],
+          higherTimeframe: "UNAVAILABLE",
+          relativeStrength: "UNAVAILABLE",
+          reasons: [],
+        },
+      }),
+    );
+
+    expect(symbols(filterResults(rows, { signalState: "confirmed reversal" }))).toEqual(["CONFIRMED"]);
+    expect(symbols(filterResults(rows, { confirmation: "strong" }))).toEqual(["CONFIRMED"]);
+    expect(symbols(filterResults(rows, { confirmation: "core only" }))).toEqual(["CANDIDATE"]);
+  });
+
   it("applies every populated numeric minimum and maximum filter", () => {
     const rows = indexed(
       buy("MATCH", { entry: 100, stop: 90, target1: 110, target2: 120, autoPeriod: 20 }),

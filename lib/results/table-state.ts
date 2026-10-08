@@ -3,6 +3,11 @@ import type { ScanItemResult } from "@/lib/signals/scan-symbol";
 export type ResultColumn =
   | "symbol"
   | "status"
+  | "tier"
+  | "signalState"
+  | "confirmation"
+  | "tierScore"
+  | "entryReadiness"
   | "entry"
   | "stop"
   | "target1"
@@ -20,6 +25,12 @@ type RangeInput = number | string | Date | null | undefined;
 export interface TableFilters {
   symbol?: string;
   status?: string;
+  tier?: string;
+  signalState?: string;
+  confirmation?: string;
+  entryReadiness?: string;
+  minTierScore?: RangeInput;
+  maxTierScore?: RangeInput;
   minEntry?: RangeInput;
   maxEntry?: RangeInput;
   minStop?: RangeInput;
@@ -50,6 +61,7 @@ const STATUS_TEXT: Record<ScanItemResult["status"], string> = {
   STALE_DATA: "Market data is stale",
   INVALID_CANDLES: "Market data could not be validated",
   PROVIDER_ERROR: "Market data provider error",
+  CALCULATION_ERROR: "Signal calculation failed",
   DATA_QUALITY_LIMITATION: "Market data calendar or adjustment coverage is limited",
   PROVIDER_TIMEOUT: "Market data request timed out",
   INVALID_INSTRUMENT: "Instrument is not supported",
@@ -73,6 +85,18 @@ function columnValue(result: ScanItemResult, column: ResultColumn): string | num
       return result.symbol;
     case "status":
       return `${result.status} ${statusText(result)}`;
+    case "tier":
+      return recommendation?.signalTier;
+    case "signalState":
+      return recommendation?.signalState ?? recommendation?.sequentialEvidence?.state;
+    case "confirmation":
+      return recommendation?.confirmation
+        ? `${recommendation.confirmation.grade} ${recommendation.confirmation.score.toFixed(2)}`
+        : undefined;
+    case "tierScore":
+      return recommendation?.tierScore;
+    case "entryReadiness":
+      return recommendation?.entryReadiness;
     case "entry":
       return recommendation?.entry;
     case "stop":
@@ -134,12 +158,17 @@ export function rowId(result: ScanItemResult, originalIndex: number): string {
 export function filterResults(indexedResults: IndexedResult[], filters: TableFilters = {}): IndexedResult[] {
   const symbol = normalizeText(filters.symbol ?? "");
   const status = normalizeText(filters.status ?? "");
+  const signalState = normalizeText(filters.signalState ?? "");
+  const confirmation = normalizeText(filters.confirmation ?? "");
+  const tier = normalizeText(filters.tier ?? "");
+  const entryReadiness = normalizeText(filters.entryReadiness ?? "");
   const ranges = {
     entry: [numberInput(filters.minEntry), numberInput(filters.maxEntry)],
     stop: [numberInput(filters.minStop), numberInput(filters.maxStop)],
     target1: [numberInput(filters.minTarget1), numberInput(filters.maxTarget1)],
     target2: [numberInput(filters.minTarget2), numberInput(filters.maxTarget2)],
     autoPeriod: [numberInput(filters.minAutoPeriod), numberInput(filters.maxAutoPeriod)],
+    tierScore: [numberInput(filters.minTierScore), numberInput(filters.maxTierScore)],
     dataAsOf: [dateInput(filters.dataAsOfFrom, false), dateInput(filters.dataAsOfTo, true)],
   } as const;
 
@@ -155,12 +184,21 @@ export function filterResults(indexedResults: IndexedResult[], filters: TableFil
         return false;
       }
     }
+    if (signalState && !normalizeText(String(columnValue(result, "signalState") ?? "")).includes(signalState)) {
+      return false;
+    }
+    if (tier && !normalizeText(String(columnValue(result, "tier") ?? "")).includes(tier)) return false;
+    if (confirmation && !normalizeText(String(columnValue(result, "confirmation") ?? "")).includes(confirmation)) {
+      return false;
+    }
+    if (entryReadiness && !normalizeText(String(columnValue(result, "entryReadiness") ?? "")).includes(entryReadiness)) return false;
     return (
       isWithinRange(columnValue(result, "entry") as number | undefined, ...ranges.entry) &&
       isWithinRange(columnValue(result, "stop") as number | undefined, ...ranges.stop) &&
       isWithinRange(columnValue(result, "target1") as number | undefined, ...ranges.target1) &&
       isWithinRange(columnValue(result, "target2") as number | undefined, ...ranges.target2) &&
       isWithinRange(columnValue(result, "autoPeriod") as number | undefined, ...ranges.autoPeriod) &&
+      isWithinRange(columnValue(result, "tierScore") as number | undefined, ...ranges.tierScore) &&
       isWithinRange(columnValue(result, "dataAsOf") as number | undefined, ...ranges.dataAsOf)
     );
   });

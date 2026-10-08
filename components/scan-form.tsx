@@ -14,7 +14,7 @@ type WorkPhase =
   | "scanning"
   | "complete"
   | "exporting";
-type ResultFilter = "ALL" | "BUY" | "NO_SIGNAL" | "DATA_ISSUE";
+type ResultFilter = "ALL" | "BUY" | "CONFIRMED" | "CANDIDATE" | "NO_SIGNAL" | "DATA_ISSUE";
 
 interface RequestError {
   title: string;
@@ -49,6 +49,7 @@ const NON_BUY_STATUSES = new Set<ScanItemResult["status"]>([
   "INVALID_INSTRUMENT",
   "TICK_SIZE_UNRESOLVED",
   "PROVIDER_ERROR",
+  "CALCULATION_ERROR",
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -83,7 +84,7 @@ function isReversalConfirmation(value: unknown): boolean {
   const range = value.validPeriodRange;
   const validPeriodCount = value.validPeriodCount;
   return (
-    value.version === "confirmation-v1" &&
+    (value.version === "confirmation-v1" || value.version === "confirmation-v2") &&
     (value.grade === "STRONG" || value.grade === "CONFIRMED" || value.grade === "CORE_ONLY") &&
     isFiniteNumber(value.score) && value.score >= 0 && value.score <= 100 &&
     isFiniteNumber(value.closeLocation) &&
@@ -97,6 +98,43 @@ function isReversalConfirmation(value: unknown): boolean {
     value.higherTimeframe === "UNAVAILABLE" &&
     value.relativeStrength === "UNAVAILABLE" &&
     Array.isArray(value.reasons) && value.reasons.every((reason) => typeof reason === "string")
+  );
+}
+
+function isProbability(value: unknown): boolean {
+  return value === null || (isFiniteNumber(value) && value >= 0 && value <= 1);
+}
+
+function isBoundedProbability(value: unknown): boolean {
+  return isFiniteNumber(value) && value >= 0 && value <= 1;
+}
+
+function isTradeDiagnostics(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const interval = value.reversalConfidenceInterval;
+  const validInterval = interval === null || (
+    Array.isArray(interval) && interval.length === 2 &&
+    isBoundedProbability(interval[0]) && isBoundedProbability(interval[1]) &&
+    (interval[0] as number) <= (interval[1] as number)
+  );
+  return (
+    (value.version === "trade-diagnostics-v1" || value.version === "trade-diagnostics-v2") &&
+    isProbability(value.reversalProbability) &&
+    validInterval &&
+    isProbability(value.target1BeforeStopProbability) &&
+    isProbability(value.target2BeforeStopProbability) &&
+    (value.comparableSignals === null || isNonNegativeInteger(value.comparableSignals)) &&
+    (value.target1Wins === null || isNonNegativeInteger(value.target1Wins)) &&
+    (value.stopFirstOutcomes === null || isNonNegativeInteger(value.stopFirstOutcomes)) &&
+    (value.medianBarsToTarget1 === null || isNonNegativeInteger(value.medianBarsToTarget1)) &&
+    (value.medianMae === null || isFiniteNumber(value.medianMae)) &&
+    (value.medianMfe === null || isFiniteNumber(value.medianMfe)) &&
+    isNonNegativeInteger(value.maximumHoldingCandles) &&
+    ["BULLISH", "NEUTRAL_TO_BULLISH", "NEUTRAL", "UNAVAILABLE"].includes(value.marketRegime as string) &&
+    ["VERIFIED", "LIMITED", "NOT_AUDITED", "SESSION_WINDOW_COMPLETE"].includes(value.dataQuality as string) &&
+    ["UNAVAILABLE", "UNVALIDATED_MODEL", "WALK_FORWARD_VALIDATED"].includes(value.calibration as string) &&
+    isFiniteNumber(value.evidenceQualityScore) && value.evidenceQualityScore >= 0 && value.evidenceQualityScore <= 100 &&
+    (value.tradeQualityScore === null || (isFiniteNumber(value.tradeQualityScore) && value.tradeQualityScore >= 0 && value.tradeQualityScore <= 100))
   );
 }
 
@@ -164,14 +202,15 @@ function isBuyRecommendation(value: unknown, symbol: string): boolean {
     (value.tickPolicy === "nse-cm-price-band-2025-v1" ||
       value.tickPolicy === "nse-cm-legacy-0.05-v1" ||
       value.tickPolicy === "nse-index-metadata-v1") &&
-    isFiniteNumber(value.reactionHigh) &&
-    isFiniteNumber(value.rewardRisk) &&
+    (value.reactionHigh === null || isFiniteNumber(value.reactionHigh)) &&
+    (value.rewardRisk === null || isFiniteNumber(value.rewardRisk)) &&
     value.scoreVersion === "structural-v1" &&
     isFiniteNumber(value.score) &&
     hasFiniteScoreComponents(value.scoreComponents) &&
-    value.higherTimeframeInput === "NEUTRAL_UNAVAILABLE" &&
+    ["BULLISH", "BEARISH", "NEUTRAL", "NEUTRAL_UNAVAILABLE"].includes(value.higherTimeframeInput as string) &&
     typeof value.anchorRationale === "string" &&
     (value.confirmation === undefined || isReversalConfirmation(value.confirmation)) &&
+    (value.tradeDiagnostics === undefined || isTradeDiagnostics(value.tradeDiagnostics)) &&
     isOptionalString(value.companyName) &&
     isOptionalString(value.industry)
   );
@@ -224,6 +263,7 @@ export function ScanForm() {
   const [timeframe, setTimeframe] = useState<Timeframe>("1d");
   const [results, setResults] = useState<ScanItemResult[]>([]);
   const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
+  const [scanProgress, setScanProgress] = useState(0);
   const [projection, setProjection] = useState<ScanResultsProjection>({ filtered: [], selected: [] });
   const [error, setError] = useState<RequestError>();
   const errorRef = useRef<HTMLDivElement>(null);
@@ -236,6 +276,8 @@ export function ScanForm() {
     () => results.filter((result) => {
       if (resultFilter === "ALL") return true;
       if (resultFilter === "BUY") return result.status === "BUY";
+      if (resultFilter === "CONFIRMED") return result.status === "BUY" && result.recommendation?.signalTier === "CONFIRMED_REVERSAL";
+      if (resultFilter === "CANDIDATE") return result.status === "BUY" && result.recommendation?.signalTier !== "CONFIRMED_REVERSAL";
       if (resultFilter === "NO_SIGNAL") return result.status === "NO_SIGNAL" || result.status === "OK";
       return result.status !== "BUY" && result.status !== "NO_SIGNAL" && result.status !== "OK";
     }),
@@ -248,6 +290,24 @@ export function ScanForm() {
       errorRef.current?.focus();
     }
   }, [error]);
+
+  useEffect(() => {
+    if (phase !== "scanning") {
+      return;
+    }
+
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      // The API returns one validated batch, so this is request progress rather
+      // than a fabricated per-symbol completion count. It eases toward 90%
+      // until the response arrives and keeps the user informed during slower scans.
+      const elapsed = Date.now() - startedAt;
+      const next = Math.min(90, 8 + 82 * (1 - Math.exp(-elapsed / 12_000)));
+      setScanProgress((current) => Math.max(current, next));
+    }, 200);
+
+    return () => window.clearInterval(timer);
+  }, [phase]);
 
   useEffect(
     () => () => {
@@ -276,6 +336,7 @@ export function ScanForm() {
     requestIdRef.current += 1;
     activeRequestRef.current?.controller.abort();
     activeRequestRef.current = undefined;
+    setScanProgress(0);
   }
 
   async function parseFile(file: File): Promise<void> {
@@ -334,6 +395,7 @@ export function ScanForm() {
     setError(undefined);
     setResults([]);
     resetProjection();
+    setScanProgress(8);
     setPhase("scanning");
 
     try {
@@ -359,6 +421,7 @@ export function ScanForm() {
         throw new Error("The server returned invalid scan results.");
       }
       setResults(parsedResults);
+      setScanProgress(100);
       setPhase("complete");
     } catch (cause) {
       if (!ownsRequest(request) || isAbortError(cause)) {
@@ -424,6 +487,9 @@ export function ScanForm() {
   }
 
   const buyCount = results.filter(({ status }) => status === "BUY").length;
+  const confirmedCount = results.filter(({ status, recommendation }) => status === "BUY" && recommendation?.signalTier === "CONFIRMED_REVERSAL").length;
+  const candidateCount = buyCount - confirmedCount;
+  const warningCount = results.filter(({ status }) => status !== "BUY" && status !== "NO_SIGNAL" && status !== "OK").length;
 
   return (
     <div className="scan-workspace">
@@ -437,6 +503,7 @@ export function ScanForm() {
 
         <div className="scan-controls">
           <div className="field upload-field">
+            <p className="scan-step">01 · Upload universe</p>
             <label htmlFor="stock-list">Upload stock list</label>
             <input
               id="stock-list"
@@ -454,6 +521,7 @@ export function ScanForm() {
           </div>
 
           <div className="field timeframe-field">
+            <p className="scan-step">02 · Choose timeframe</p>
             <label htmlFor="timeframe">Candle timeframe</label>
             <select
               id="timeframe"
@@ -468,34 +536,41 @@ export function ScanForm() {
                 setPhase(instruments.length > 0 ? "ready" : "empty");
               }}
             >
-              {TIMEFRAMES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
+              <optgroup label="Intraday">
+                {TIMEFRAMES.filter(({ value }) => ["5m", "15m", "1h"].includes(value)).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </optgroup>
+              <optgroup label="Swing">
+                {TIMEFRAMES.filter(({ value }) => ["1d", "1wk"].includes(value)).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </optgroup>
+              <optgroup label="Long-term">
+                {TIMEFRAMES.filter(({ value }) => value === "1mo").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </optgroup>
             </select>
           </div>
 
-          <button
-            className="primary-action"
-            type="button"
-            disabled={instruments.length === 0 || isBusy}
-            onClick={() => void runCurrentScan()}
-          >
-            {phase === "scanning" ? "Scanning…" : "Scan for BUY signals"}
-          </button>
-          {phase === "scanning" ? (
+          <div className="scan-actions">
+            <p className="scan-step">03 · Run scan</p>
             <button
-              className="secondary-action"
+              className="primary-action"
               type="button"
-              onClick={() => {
-                cancelActiveRequest();
-                setPhase("ready");
-              }}
+              disabled={instruments.length === 0 || isBusy}
+              onClick={() => void runCurrentScan()}
             >
-              Cancel scan
+              {phase === "scanning" ? "Scanning…" : "Scan for BUY signals"}
             </button>
-          ) : null}
+            {phase === "scanning" ? (
+              <button
+                className="secondary-action"
+                type="button"
+                onClick={() => {
+                  cancelActiveRequest();
+                  setPhase("ready");
+                }}
+              >
+                Cancel scan
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="summary-area" aria-live="polite">
@@ -525,7 +600,26 @@ export function ScanForm() {
             </div>
           ) : null}
           {phase === "scanning" ? (
-            <p className="progress-copy">Scanning {plural(instruments.length, "instrument")}…</p>
+            <div className="scan-progress" aria-live="polite">
+              <div className="scan-progress-meta">
+                <p className="progress-copy">Scanning {plural(instruments.length, "instrument")}…</p>
+                <strong>{Math.round(scanProgress)}%</strong>
+              </div>
+              <div
+                className="scan-progress-track"
+                role="progressbar"
+                aria-label="Scan progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(scanProgress)}
+              >
+                <span
+                  className="scan-progress-fill"
+                  style={{ width: `${Math.max(4, scanProgress)}%` }}
+                />
+              </div>
+              <p className="scan-progress-detail">Fetching completed candles and validating reversal rules…</p>
+            </div>
           ) : null}
           {(phase === "complete" || phase === "exporting") && results.length > 0 ? (
             <p className="progress-copy">
@@ -542,6 +636,7 @@ export function ScanForm() {
           <label>
             Show
             <select
+              className="filter-select"
               value={resultFilter}
               onChange={(event) => {
                 setResultFilter(event.currentTarget.value as ResultFilter);
@@ -550,6 +645,8 @@ export function ScanForm() {
             >
               <option value="ALL">All results</option>
               <option value="BUY">BUY only</option>
+              <option value="CONFIRMED">Confirmed reversal</option>
+              <option value="CANDIDATE">Developing / early</option>
               <option value="NO_SIGNAL">No signal</option>
               <option value="DATA_ISSUE">Data issues</option>
             </select>
@@ -573,9 +670,22 @@ export function ScanForm() {
         </div>
         {results.length > 0 ? (
           <>
+            <div className="scan-metrics" aria-label="Scan summary">
+              <button type="button" className="scan-metric" onClick={() => setResultFilter("BUY")}><strong>{buyCount}</strong><span>Signals found</span></button>
+              <button type="button" className="scan-metric scan-metric--confirmed" onClick={() => setResultFilter("CONFIRMED")}><strong>{confirmedCount}</strong><span>Confirmed</span></button>
+              <button type="button" className="scan-metric scan-metric--candidate" onClick={() => setResultFilter("CANDIDATE")}><strong>{candidateCount}</strong><span>Candidates</span></button>
+              <button type="button" className="scan-metric scan-metric--warning" onClick={() => setResultFilter("DATA_ISSUE")}><strong>{warningCount}</strong><span>Data warnings</span></button>
+            </div>
+            <p className="results-legend" aria-label="Signal colour legend"><span><i className="legend-dot legend-dot--confirmed" />Confirmed</span><span><i className="legend-dot legend-dot--developing" />Developing</span><span><i className="legend-dot legend-dot--candidate" />Early candidate</span><span><i className="legend-dot legend-dot--pending" />Pending validation</span></p>
             <p className="execution-caveat">
               Entry reference is the completed signal candle close. Actual execution is the next
-              obtainable price; skip a gap that reduces reward/risk below your minimum.
+              obtainable price; skip a gap that reduces reward/risk below your minimum. Each scan
+              evaluates only the latest completed candle, so a BUY from an earlier scan naturally
+              disappears when that symbol no longer qualifies on the newer candle. Confirmation
+              diagnostics are informational and never suppress a core rules BUY. For weekly and
+              monthly scans, compare the chart with the completed signal candle shown in Details;
+              TradingView&apos;s currently forming week/month is intentionally excluded. A lower-DC
+              touch with a flat lower channel is not a reversal signal.
             </p>
             {categoryResults.length > 0 ? (
               <ScanResults results={categoryResults} onProjectionChange={setProjection} />
