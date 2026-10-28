@@ -45,6 +45,7 @@ const priceFormatter = new Intl.NumberFormat("en-IN", {
 const COLUMNS: Array<{ column: ResultColumn; label: string; numeric?: boolean }> = [
   { column: "symbol", label: "Instrument" },
   { column: "status", label: "Status" },
+  { column: "autoPeriod", label: "Donchian length (days)", numeric: true },
   { column: "tier", label: "Trade tier" },
   { column: "signalState", label: "Signal state" },
   { column: "confirmation", label: "Reversal confirmation" },
@@ -54,7 +55,6 @@ const COLUMNS: Array<{ column: ResultColumn; label: string; numeric?: boolean }>
   { column: "stop", label: "Stop", numeric: true },
   { column: "target1", label: "Target 1", numeric: true },
   { column: "target2", label: "Target 2", numeric: true },
-  { column: "autoPeriod", label: "Donchian length (days)", numeric: true },
   { column: "dataAsOf", label: "Data as of" },
 ];
 
