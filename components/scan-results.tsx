@@ -401,6 +401,7 @@ export function ScanResults({
                     </td>
                     <th scope="row" className="instrument-column">{result.symbol}</th>
                     <td className={result.status === "BUY" ? "buy-status" : "status-copy"}>{statusText(result)}</td>
+                    <td className="number-cell">{recommendation?.autoPeriod ?? "—"}</td>
                     <td className={`table-tier table-tier--${result.recommendation?.signalTier?.toLowerCase() ?? "none"}`}>
                       {result.recommendation?.signalTier?.replaceAll("_", " ") ?? "—"}
                     </td>
@@ -418,7 +419,6 @@ export function ScanResults({
                     <td className="number-cell">{formatPrice(recommendation?.stop)}</td>
                     <td className="number-cell">{formatPrice(recommendation?.target1)}</td>
                     <td className="number-cell">{formatPrice(recommendation?.target2)}</td>
-                    <td className="number-cell">{recommendation?.autoPeriod ?? "—"}</td>
                     <td className="data-as-of-column">
                       {recommendation ? (
                         <time dateTime={new Date(recommendation.dataAsOf).toISOString()}>{dateFormatter.format(recommendation.dataAsOf)}</time>
