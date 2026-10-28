@@ -177,7 +177,7 @@ export function SignalDetails({
     ["Signal candle low", recommendation.signalLow === undefined ? "Unavailable" : formatPrice(recommendation.signalLow)],
     ["Signal candle close", recommendation.signalClose === undefined ? "Unavailable" : formatPrice(recommendation.signalClose)],
     ["Reversal gate", gateText],
-    ["Auto period", String(recommendation.autoPeriod)],
+    ["Donchian length (days)", String(recommendation.autoPeriod)],
     ...(recommendation.periodStability
       ? [["Period audit meaning", "Only one period can pass exact touch plus rising LDC. Neighbour counts do not measure confidence."]] as DetailField[]
       : []),

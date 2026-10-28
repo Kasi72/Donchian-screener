@@ -54,7 +54,7 @@ const COLUMNS: Array<{ column: ResultColumn; label: string; numeric?: boolean }>
   { column: "stop", label: "Stop", numeric: true },
   { column: "target1", label: "Target 1", numeric: true },
   { column: "target2", label: "Target 2", numeric: true },
-  { column: "autoPeriod", label: "Auto period", numeric: true },
+  { column: "autoPeriod", label: "Donchian length (days)", numeric: true },
   { column: "dataAsOf", label: "Data as of" },
 ];
 
@@ -63,7 +63,7 @@ const NUMERIC_FILTERS: Array<{ min: keyof TableFilters; max: keyof TableFilters;
   { min: "minStop", max: "maxStop", label: "Stop" },
   { min: "minTarget1", max: "maxTarget1", label: "Target 1" },
   { min: "minTarget2", max: "maxTarget2", label: "Target 2" },
-  { min: "minAutoPeriod", max: "maxAutoPeriod", label: "Auto period" },
+  { min: "minAutoPeriod", max: "maxAutoPeriod", label: "Donchian length (days)" },
 ];
 
 function formatPrice(value: number | undefined): string {

@@ -98,7 +98,7 @@ export function buildTearSheetSections(recommendation: BuyRecommendation): TearS
         ["Signal candle low", valueOrUnavailable(recommendation.signalLow, money)],
         ["Signal candle close", valueOrUnavailable(recommendation.signalClose, money)],
         ["Reversal gate", displayedGate(recommendation)],
-        ["Auto period", String(recommendation.autoPeriod)],
+        ["Donchian length (days)", String(recommendation.autoPeriod)],
         ["Period audit meaning", "Only one period can pass exact touch plus rising LDC. Neighbour counts do not measure confidence."],
         ["Period audit", recommendation.periodAudit?.map(({ period, valid }) => `${period}:${valid ? "valid" : "invalid"}`).join(" | ") ?? "Unavailable"],
       ],
@@ -185,7 +185,7 @@ export function buildWhatsAppSummary(recommendation: BuyRecommendation): string 
     `🛡️ Stop: ${money(recommendation.stop)} (risk ${money(risk)} / ${riskPct.toFixed(2)}%)`,
     `✅ Target 1: ${money(recommendation.target1)} (${t1R.toFixed(2)}R)`,
     `🚀 Target 2: ${money(recommendation.target2)} (${t2R.toFixed(2)}R)`,
-    `📊 Donchian period: ${recommendation.autoPeriod} | Gate: PASS`,
+    `📊 Donchian length: ${recommendation.autoPeriod} days | Gate: PASS`,
     `🕯️ Signal candle: ${date(recommendation.signalTime)}`,
     `⚠️ Next obtainable price; recalculate risk after gaps. Not investment advice.`,
   ].join("\n");
