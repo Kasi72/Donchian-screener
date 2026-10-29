@@ -60,7 +60,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     instruments,
     parsed.data.timeframe,
     provider,
-    { signal: request.signal },
+    { signal: request.signal, includeMarketContext: true },
   );
   return NextResponse.json({ results });
 }

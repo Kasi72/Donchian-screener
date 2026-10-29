@@ -1,13 +1,15 @@
 import type { Candle } from "@/lib/market/provider";
 import { atrAt } from "./atr";
 import { bullishRollover } from "./donchian";
+import { priceToTicks } from "./ticks";
+import { PERIOD_STABILITY_RADIUS } from "./period-selector";
 
-export const REVERSAL_CONFIRMATION_VERSION = "confirmation-v1" as const;
+export const REVERSAL_CONFIRMATION_VERSION = "confirmation-v2" as const;
 
 export type ReversalConfirmationGrade = "STRONG" | "CONFIRMED" | "CORE_ONLY";
 
 export interface ReversalConfirmation {
-  version: typeof REVERSAL_CONFIRMATION_VERSION;
+  version: typeof REVERSAL_CONFIRMATION_VERSION | "confirmation-v1";
   score: number;
   grade: ReversalConfirmationGrade;
   closeLocation: number;
@@ -25,7 +27,6 @@ export interface ReversalConfirmation {
 const EPSILON = 1e-9;
 const VOLUME_LOOKBACK = 20;
 const CHANGE_LOOKBACK = 20;
-const PERIOD_RADIUS = 3;
 
 function clamp(value: number, minimum = 0, maximum = 1): number {
   return Math.max(minimum, Math.min(maximum, value));
@@ -42,6 +43,25 @@ function median(values: number[]): number {
 
 function mad(values: number[], center: number): number {
   return median(values.map((value) => Math.abs(value - center)));
+}
+
+function quantile(values: number[], probability: number): number {
+  const ordered = [...values].sort((left, right) => left - right);
+  const position = (ordered.length - 1) * probability;
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  return lower === upper ? ordered[lower] : ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower);
+}
+
+function robustScale(values: number[], center: number): number {
+  const madScale = 1.4826 * mad(values, center);
+  if (madScale > EPSILON) return madScale;
+  const iqr = quantile(values, 0.75) - quantile(values, 0.25);
+  return iqr > EPSILON ? iqr / 1.349 : 0;
+}
+
+function sigmoid(value: number): number {
+  return 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, value))));
 }
 
 function finiteOrNull(value: number): number | null {
@@ -70,10 +90,15 @@ function changePointScore(candles: Candle[], signalIndex: number): number {
     if (previous > 0 && current > 0) returns.push(Math.log(current / previous));
   }
   if (returns.length < 5) return 0.5;
-  const center = median(returns);
-  const scale = Math.max(1.4826 * mad(returns, center), EPSILON);
-  const cumulative = returns.reduce((sum, value) => sum + (value - center), 0);
-  return clamp(0.5 + cumulative / (scale * Math.sqrt(returns.length) * 4));
+  const split = Math.max(5, returns.length - 8);
+  const baseline = returns.slice(0, split);
+  const recent = returns.slice(split);
+  const baselineCenter = median(baseline);
+  const scale = robustScale(baseline, baselineCenter) || robustScale(returns, baselineCenter);
+  if (scale <= EPSILON) return 0.5;
+  const recentCenter = median(recent);
+  const standardError = scale / Math.sqrt(recent.length);
+  return sigmoid((recentCenter - baselineCenter) / Math.max(standardError, EPSILON) - 1.2);
 }
 
 function periodStability(
@@ -83,8 +108,8 @@ function periodStability(
   tickSize: number,
 ): { count: number; range: [number, number] } {
   const valid: number[] = [];
-  const first = Math.max(1, selectedPeriod - PERIOD_RADIUS);
-  const last = Math.min(signalIndex, selectedPeriod + PERIOD_RADIUS);
+  const first = Math.max(1, selectedPeriod - PERIOD_STABILITY_RADIUS);
+  const last = Math.min(signalIndex, selectedPeriod + PERIOD_STABILITY_RADIUS);
   for (let period = first; period <= last; period += 1) {
     if (bullishRollover(candles, signalIndex, period, tickSize).passed) {
       valid.push(period);
@@ -118,16 +143,17 @@ export function calculateReversalConfirmation(
   const volumeZ = finiteOrNull(volumeZScore(candles, signalIndex) ?? Number.NaN);
   const cpScore = changePointScore(candles, signalIndex);
   const stability = periodStability(candles, signalIndex, selectedPeriod, tickSize);
-  const channelTouch = Math.abs(signal.low - currentLdc) <= tickSize / 2;
+  const channelTouch = priceToTicks(signal.low, tickSize) === priceToTicks(currentLdc, tickSize);
 
   const candleScore = 25 * closeLocation;
   const wickScore = 15 * clamp(lowerWickRatio / 0.5);
   const recoveryScore = 20 * clamp(atrRecovery / 1.5);
   const volumeScore = 15 * (volumeZ === null ? 0.5 : clamp(0.5 + volumeZ / 4));
   const changeScore = 15 * cpScore;
-  const stabilityScore = 10 * clamp(stability.count / (PERIOD_RADIUS * 2 + 1));
+  // Exact touch plus strict rollover admits at most one period. Neighbour
+  // counts are a window audit, never independent evidence of confidence.
   const score = Math.round(
-    (candleScore + wickScore + recoveryScore + volumeScore + changeScore + stabilityScore) * 100,
+    ((candleScore + wickScore + recoveryScore + volumeScore + changeScore) / 90) * 100 * 100,
   ) / 100;
   const grade: ReversalConfirmationGrade =
     score >= 75 ? "STRONG" : score >= 60 ? "CONFIRMED" : "CORE_ONLY";
@@ -139,7 +165,6 @@ export function calculateReversalConfirmation(
   if (atrRecovery >= 0.5) reasons.push("recovered at least 0.5 ATR from the low");
   if (volumeZ !== null && volumeZ >= 1) reasons.push("volume is unusually high versus its baseline");
   if (cpScore >= 0.6) reasons.push("returns show a positive change-point impulse");
-  if (stability.count >= 3) reasons.push(`Donchian condition remains valid across ${stability.count} nearby periods`);
   if (reasons.length === 0) reasons.push("Donchian rules pass, but secondary confirmation is limited");
 
   // Keep the explicit input in the calculation contract so callers cannot

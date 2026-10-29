@@ -10,13 +10,40 @@ import type {
   MarketDataProvider,
   Timeframe,
 } from "@/lib/market/provider";
-import { selectRulesPeriod } from "./period-selector";
-import type { StructuralScoreComponents } from "./period-selector";
+import {
+  auditDailyCandleWindow,
+  auditIntradayCandleWindow,
+  type DailyCandleWindowAudit,
+  type IntradayCandleWindowAudit,
+} from "@/lib/market/window-audit";
+import {
+  auditPeriodNeighborhood,
+  isExactPeriodCandidate,
+  selectRulesPeriod,
+} from "./period-selector";
+import type {
+  PeriodAudit,
+  PeriodStability,
+  StructuralScoreComponents,
+} from "./period-selector";
 import {
   calculateReversalConfirmation,
   type ReversalConfirmation,
 } from "./reversal-confirmation";
+import {
+  calculateSequentialEvidence,
+  type ReversalState,
+  type SequentialEvidence,
+} from "./sequential-evidence";
+import {
+  calculateTradeDiagnostics,
+  type TradeDiagnostics,
+} from "./trade-diagnostics";
 import { calculateTradeLevels } from "./risk-levels";
+import { atrAt } from "./atr";
+import { classifySignalTier, type EntryReadiness, type SignalTier } from "./signal-tier";
+import { priceToTicks } from "./ticks";
+import { assessExecutionQuality, type ExecutionQuality } from "./execution-quality";
 import {
   ATR_PERIOD,
   PIVOT_RIGHT_BARS,
@@ -37,6 +64,31 @@ export interface BuyRecommendation {
   target2: number;
   currentLdc: number;
   previousLdc: number;
+  signalLow?: number;
+  signalClose?: number;
+  signalOpen?: number;
+  signalHigh?: number;
+  signalLowTick?: number;
+  currentLdcTick?: number;
+  previousLdcTick?: number;
+  signalCandleTime?: number;
+  windowStartTime?: number;
+  windowEndTime?: number;
+  previousWindowStartTime?: number;
+  previousWindowEndTime?: number;
+  providerAsOf?: number;
+  rolloverTicks?: number;
+  touchDistanceTicks?: number;
+  /** LDC rise normalized by causal ATR; informational and non-gating. */
+  rolloverStrengthAtr?: number;
+  rolloverQuality?: "MEANINGFUL" | "MARGINAL";
+  periodCandidateCount?: number;
+  periodStability?: PeriodStability[];
+  periodAudit?: PeriodAudit[];
+  windowAudit?: DailyCandleWindowAudit;
+  intradayWindowAudit?: IntradayCandleWindowAudit;
+  anchorIndex?: number;
+  anchorBarsAgo?: number;
   anchorTime: number;
   strategyVersion: typeof STRATEGY_VERSION;
   dataAsOf: number;
@@ -46,14 +98,34 @@ export interface BuyRecommendation {
     | "nse-cm-price-band-2025-v1"
     | "nse-cm-legacy-0.05-v1"
     | "nse-index-metadata-v1";
-  reactionHigh: number;
-  rewardRisk: number;
+  reactionHigh: number | null;
+  rewardRisk: number | null;
+  hasTarget1Room?: boolean;
+  riskPerShare?: number;
+  riskPercent?: number;
+  target1RewardRisk?: number;
+  target2RewardRisk?: number;
+  stopBuffer?: number;
+  stopBufferAtr?: number;
   scoreVersion: "structural-v1";
   score: number;
   scoreComponents: StructuralScoreComponents;
-  higherTimeframeInput: "NEUTRAL_UNAVAILABLE";
+  higherTimeframeInput: "BULLISH" | "BEARISH" | "NEUTRAL" | "NEUTRAL_UNAVAILABLE";
   anchorRationale: string;
   confirmation?: ReversalConfirmation;
+  /** Causal evidence state; the Donchian gate remains the hard BUY condition. */
+  signalState?: ReversalState;
+  sequentialEvidence?: SequentialEvidence;
+  tradeDiagnostics?: TradeDiagnostics;
+  signalTier?: SignalTier;
+  tierScore?: number;
+  entryReadiness?: EntryReadiness;
+  tierReason?: string;
+  tierWarnings?: string[];
+  executionQuality?: ExecutionQuality;
+  candleSnapshotHash?: string;
+  dataProvider?: string;
+  providerConsensus?: "AGREED" | "DIVERGED" | "SINGLE_SOURCE" | "UNAVAILABLE";
   companyName?: string;
   industry?: string;
 }
@@ -64,6 +136,7 @@ export type ScanStatus =
   | CandleResponse["status"]
   | "INVALID_INSTRUMENT"
   | "TICK_SIZE_UNRESOLVED"
+  | "CALCULATION_ERROR"
   | "PROVIDER_ERROR";
 
 export interface ScanItemResult {
@@ -77,6 +150,8 @@ export interface ScanSymbolOptions {
   now?: Date;
   signal?: AbortSignal;
   deadlineMs?: number;
+  benchmarkCandles?: readonly Candle[];
+  benchmarkSymbol?: string;
 }
 
 function providerFailure(symbol: string): ScanItemResult {
@@ -192,8 +267,46 @@ export async function scanSymbol(
     if (selection.selected === undefined) {
       return { symbol: instrument.symbol, status: "NO_SIGNAL" };
     }
-
     const selected = selection.selected;
+    if (
+      !isExactPeriodCandidate(
+        candleResponse.candles,
+        signalIndex,
+        selected,
+        tickResolution.tickSize,
+      )
+    ) {
+      return { symbol: instrument.symbol, status: "NO_SIGNAL" };
+    }
+    const dependencyStartIndex = Math.min(
+      selected.anchor.index,
+      Math.max(0, signalIndex - 30),
+    );
+    const windowAudit =
+      timeframe === "1d"
+        ? auditDailyCandleWindow(
+            candleResponse.candles,
+            dependencyStartIndex,
+            signalIndex,
+          )
+        : undefined;
+    if (windowAudit !== undefined && !windowAudit.complete) {
+      return {
+        symbol: instrument.symbol,
+        status: "DATA_QUALITY_LIMITATION",
+        message: `Incomplete daily calculation dependency window: ${windowAudit.missingSessions} NSE session(s) missing.`,
+      };
+    }
+    const intradayWindowAudit = timeframe === "5m" || timeframe === "15m" || timeframe === "1h"
+      ? auditIntradayCandleWindow(candleResponse.candles, dependencyStartIndex, signalIndex, timeframe)
+      : undefined;
+    if (intradayWindowAudit !== undefined && !intradayWindowAudit.complete) {
+      return {
+        symbol: instrument.symbol,
+        status: "DATA_QUALITY_LIMITATION",
+        message: `Incomplete intraday calculation dependency window: ${intradayWindowAudit.missingBars} bar(s) missing.`,
+      };
+    }
     const levels = calculateTradeLevels(
       candleResponse.candles,
       signalIndex,
@@ -203,6 +316,10 @@ export async function scanSymbol(
     if (levels === null) {
       return { symbol: instrument.symbol, status: "NO_SIGNAL" };
     }
+    const signalAtr = atrAt(candleResponse.candles, signalIndex, ATR_PERIOD);
+    const currentLdcTick = priceToTicks(selected.currentLdc, tickResolution.tickSize);
+    const previousLdcTick = priceToTicks(selected.previousLdc, tickResolution.tickSize);
+    const rolloverStrengthAtr = (currentLdcTick - previousLdcTick) * tickResolution.tickSize / Math.max(signalAtr, tickResolution.tickSize);
     const confirmation = calculateReversalConfirmation(
       candleResponse.candles,
       signalIndex,
@@ -210,6 +327,33 @@ export async function scanSymbol(
       selected.currentLdc,
       tickResolution.tickSize,
     );
+    const sequentialEvidence = calculateSequentialEvidence(
+      candleResponse.candles,
+      signalIndex,
+      undefined,
+      {
+        timeframe,
+        ...(options.benchmarkCandles ? { benchmarkCandles: options.benchmarkCandles } : {}),
+        ...(options.benchmarkSymbol ? { benchmarkSymbol: options.benchmarkSymbol } : {}),
+      },
+    );
+    const tradeDiagnostics = calculateTradeDiagnostics({
+      confirmation,
+      sequential: sequentialEvidence,
+      rewardRisk: levels.rewardRisk,
+      ...(windowAudit ? { windowAudit } : {}),
+      ...(intradayWindowAudit ? { intradayWindowAudit } : {}),
+      providerConsensus: candleResponse.provenance?.consensus ?? "UNAVAILABLE",
+    });
+    const executionQuality = assessExecutionQuality(candleResponse.candles, signalIndex, timeframe, levels);
+    const tier = classifySignalTier({
+      confirmation,
+      sequential: sequentialEvidence,
+      rewardRisk: levels.rewardRisk,
+      dataQuality: tradeDiagnostics.dataQuality,
+      stop: levels.stop,
+      target1: levels.target1,
+    });
 
     const recommendation: BuyRecommendation = {
       recommendation: "BUY",
@@ -225,6 +369,40 @@ export async function scanSymbol(
       target2: levels.target2,
       currentLdc: selected.currentLdc,
       previousLdc: selected.previousLdc,
+      signalLow: signal.low,
+      signalClose: signal.close,
+      signalOpen: signal.open,
+      signalHigh: signal.high,
+      signalLowTick: priceToTicks(signal.low, tickResolution.tickSize),
+      currentLdcTick: priceToTicks(selected.currentLdc, tickResolution.tickSize),
+      previousLdcTick: priceToTicks(selected.previousLdc, tickResolution.tickSize),
+      signalCandleTime: signal.time,
+      windowStartTime: candleResponse.candles[signalIndex - selected.period + 1].time,
+      windowEndTime: signal.time,
+      previousWindowStartTime: candleResponse.candles[signalIndex - selected.period].time,
+      previousWindowEndTime: candleResponse.candles[signalIndex - 1].time,
+      providerAsOf: candleResponse.asOf,
+      rolloverTicks:
+        priceToTicks(selected.currentLdc, tickResolution.tickSize) -
+        priceToTicks(selected.previousLdc, tickResolution.tickSize),
+      touchDistanceTicks:
+        Math.abs(
+          priceToTicks(signal.low, tickResolution.tickSize) -
+            priceToTicks(selected.currentLdc, tickResolution.tickSize),
+        ),
+      rolloverStrengthAtr,
+      rolloverQuality: rolloverStrengthAtr >= 0.1 ? "MEANINGFUL" : "MARGINAL",
+      periodCandidateCount: selection.candidates.length,
+      periodStability: selection.stability,
+      periodAudit: auditPeriodNeighborhood(
+        candleResponse.candles,
+        signalIndex,
+        selected.period,
+        tickResolution.tickSize,
+      ),
+      ...(windowAudit ? { windowAudit } : {}),
+      anchorIndex: selected.anchor.index,
+      anchorBarsAgo: signalIndex - selected.anchor.index,
       anchorTime: selected.anchor.time,
       strategyVersion: STRATEGY_VERSION,
       dataAsOf: candleResponse.asOf,
@@ -233,12 +411,39 @@ export async function scanSymbol(
       tickPolicy: tickResolution.policy,
       reactionHigh: levels.reactionHigh,
       rewardRisk: levels.rewardRisk,
+      hasTarget1Room: levels.hasTarget1Room,
+      riskPerShare: levels.riskPerShare,
+      riskPercent: levels.riskPercent,
+      target1RewardRisk: levels.target1RewardRisk,
+      target2RewardRisk: levels.target2RewardRisk,
+      stopBuffer: levels.stopBuffer,
+      stopBufferAtr: levels.stopBufferAtr,
       scoreVersion: selected.scoreVersion,
       score: selected.score,
       scoreComponents: selected.scoreComponents,
-      higherTimeframeInput: "NEUTRAL_UNAVAILABLE",
-      anchorRationale: `Selected confirmed pivot low ${selected.period} bars earlier: prominence ${selected.anchor.prominenceAtr.toFixed(2)} ATR, recovery ${selected.anchor.recoveryAtr.toFixed(2)} ATR, ${selected.scoreVersion} score ${selected.score.toFixed(4)}. Higher-timeframe input is unavailable and contributes a neutral zero.`,
+      higherTimeframeInput: sequentialEvidence.context?.higherTimeframeTrend === "UNAVAILABLE" || !sequentialEvidence.context
+        ? "NEUTRAL_UNAVAILABLE"
+        : sequentialEvidence.context.higherTimeframeTrend,
+      anchorRationale: `Selected confirmed pivot low ${selected.period} bars earlier: prominence ${selected.anchor.prominenceAtr.toFixed(2)} ATR, recovery ${selected.anchor.recoveryAtr.toFixed(2)} ATR, ${selected.scoreVersion} score ${selected.score.toFixed(4)}. Higher-timeframe context: ${sequentialEvidence.context?.higherTimeframeTrend ?? "unavailable (neutral)"}.`,
       confirmation,
+      signalState: sequentialEvidence.state,
+      sequentialEvidence,
+      tradeDiagnostics,
+      signalTier: tier.tier,
+      tierScore: tier.tierScore,
+      entryReadiness: executionQuality.status === "SKIP"
+        ? "SKIP"
+        : executionQuality.status === "EXECUTABLE"
+          ? tier.entryReadiness
+          : "REVIEW_RISK",
+      tierReason: tier.tierReason,
+      tierWarnings: executionQuality.status === "EXECUTABLE"
+        ? tier.warnings
+        : [...tier.warnings, ...executionQuality.reasons],
+      executionQuality,
+      ...(candleResponse.provenance?.snapshotHash ? { candleSnapshotHash: candleResponse.provenance.snapshotHash } : {}),
+      ...(candleResponse.provenance?.providerId ? { dataProvider: candleResponse.provenance.providerId } : {}),
+      providerConsensus: candleResponse.provenance?.consensus ?? "UNAVAILABLE",
       ...(resolvedInstrument.companyName
         ? { companyName: resolvedInstrument.companyName }
         : {}),
@@ -249,7 +454,7 @@ export async function scanSymbol(
   } catch {
     return {
       symbol: instrument.symbol,
-      status: "PROVIDER_ERROR",
+      status: "CALCULATION_ERROR",
       message: `Scan evaluation failed for ${instrument.symbol}.`,
     };
   }

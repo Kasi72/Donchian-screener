@@ -136,6 +136,19 @@ describe("scanSymbol", () => {
       },
     });
     expect(result.recommendation?.stop).toBeLessThan(102);
+    expect(result.recommendation?.confirmation?.version).toBe("confirmation-v2");
+    expect(result.recommendation?.confirmation?.grade).toBe("CONFIRMED");
+    expect(result.recommendation?.signalState).toMatch(/EARLIEST_CANDIDATE|EVIDENCE_SUPPORTED/);
+    expect(result.recommendation?.sequentialEvidence?.version).toBe("sequential-v2");
+    expect(result.recommendation?.signalLow).toBe(95.02);
+    expect(result.recommendation?.signalClose).toBe(102);
+    expect(result.recommendation?.signalLowTick).toBe(1900);
+    expect(result.recommendation?.currentLdcTick).toBe(1900);
+    expect(result.recommendation?.previousLdcTick).toBe(1800);
+    expect(result.recommendation?.touchDistanceTicks).toBe(0);
+    expect(result.recommendation?.rolloverTicks).toBe(100);
+    expect(result.recommendation?.windowEndTime).toBe(result.recommendation?.signalTime);
+    expect(result.recommendation?.providerAsOf).toBe(result.recommendation?.dataAsOf);
     expect(result.recommendation?.target1).toBeGreaterThan(102);
     expect(result.recommendation?.target2).toBeGreaterThan(
       result.recommendation?.target1 ?? Number.POSITIVE_INFINITY,
@@ -150,6 +163,22 @@ describe("scanSymbol", () => {
     );
 
     expect(result).toEqual({ symbol: "FLAT", status: "NO_SIGNAL" });
+  });
+
+  it("reports an incomplete dependency window as a data-quality limitation, not NO_SIGNAL", async () => {
+    const candles = buyFixture().map((item, index) => ({
+      ...item,
+      time: (index + (index >= 95 ? 1 : 0)) * 15 * 60_000,
+    }));
+
+    const result = await scanSymbol(
+      instrument("MISSING-BAR"),
+      "15m",
+      providerReturning(completed(candles)),
+    );
+
+    expect(result.status).toBe("DATA_QUALITY_LIMITATION");
+    expect(result.message).toContain("dependency window");
   });
 
   it("rejects a rollover when the signal close is not above its low", async () => {
@@ -401,7 +430,45 @@ async function exportedRows(results: ScanItemResult[]): Promise<{
 
 describe("scan CSV export", () => {
   it("exports autoPeriod, every price level, version, and data timestamp as valid CSV", async () => {
-    const buy = recommendation({ symbol: 'ACME, "Ltd"' });
+    const buy = recommendation({
+      symbol: 'ACME, "Ltd"',
+      signalLow: 96,
+      signalClose: 101,
+      signalOpen: 99,
+      signalHigh: 103,
+      signalLowTick: 1920,
+      currentLdcTick: 1920,
+      previousLdcTick: 1880,
+      windowStartTime: -10,
+      windowEndTime: 1,
+      previousWindowStartTime: -11,
+      previousWindowEndTime: 0,
+      providerAsOf: 3,
+      rolloverTicks: 40,
+      touchDistanceTicks: 0,
+      periodCandidateCount: 2,
+      periodAudit: [
+        {
+          period: 12,
+          currentLdc: 97,
+          previousLdc: 94,
+          currentLdcTick: 1940,
+          previousLdcTick: 1880,
+          signalLowTick: 1920,
+          touchPassed: false,
+          rolloverPassed: true,
+          valid: false,
+        },
+      ],
+      windowAudit: {
+        expectedSessions: 14,
+        observedSessions: 14,
+        missingSessions: 0,
+        complete: true,
+      },
+      anchorIndex: 0,
+      anchorBarsAgo: 14,
+    });
     const { response, rows } = await exportedRows([
       { symbol: buy.symbol, status: "BUY", recommendation: buy },
     ]);
@@ -421,8 +488,64 @@ describe("scan CSV export", () => {
         previousLdc: "94",
         strategyVersion: "rules-v1",
         dataAsOf: "3",
+        signalLow: "96",
+        signalClose: "101",
+        currentLdcTick: "1920",
+        previousLdcTick: "1880",
+        signalCandleTime: "1",
+        windowStartTime: "'-10",
+        windowEndTime: "1",
+        previousWindowStartTime: "'-11",
+        previousWindowEndTime: "0",
+        providerAsOf: "3",
+        rolloverTicks: "40",
+        touchDistanceTicks: "0",
+        periodCandidateCount: "2",
+        periodAudit: '[{"period":12,"currentLdc":97,"previousLdc":94,"currentLdcTick":1940,"previousLdcTick":1880,"signalLowTick":1920,"touchPassed":false,"rolloverPassed":true,"valid":false}]',
+        windowAudit: '{"expectedSessions":14,"observedSessions":14,"missingSessions":0,"complete":true}',
+        anchorIndex: "0",
+        anchorBarsAgo: "14",
       }),
     ]);
+  });
+
+  it("exports BUY rows when reaction-high room is unavailable", async () => {
+    const buy = recommendation({ reactionHigh: null, rewardRisk: null });
+    const { response, rows } = await exportedRows([
+      { symbol: buy.symbol, status: "BUY", recommendation: buy },
+    ]);
+
+    expect(response.status).toBe(200);
+    expect(rows[0]).toEqual(expect.objectContaining({
+      symbol: "ACME",
+      reactionHigh: "",
+      rewardRisk: "",
+    }));
+  });
+
+  it("exports BUY rows with an insufficient-room execution status", async () => {
+    const buy = recommendation({
+      reactionHigh: null,
+      rewardRisk: null,
+      executionQuality: {
+        status: "INSUFFICIENT_ROOM",
+        gapRisk: "LOW",
+        maximumRecentGapAtr: 0,
+        medianDailyTurnoverInr: 1_000_000,
+        riskPercent: 1,
+        reasons: ["Reaction-high room is unavailable"],
+        policyVersion: "execution-v1",
+      },
+    });
+    const { response, rows } = await exportedRows([
+      { symbol: buy.symbol, status: "BUY", recommendation: buy },
+    ]);
+
+    expect(response.status).toBe(200);
+    expect(rows[0]).toEqual(expect.objectContaining({
+      symbol: "ACME",
+      executionStatus: "INSUFFICIENT_ROOM",
+    }));
   });
 
   it.each(["=SUM(A1:A2)", "  +cmd", "\t-2+3", " @evil"])(
@@ -568,7 +691,7 @@ describe("scan JSON endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(yahooRequests).toEqual(["RELIANCE.NS"]);
+    expect(yahooRequests).toEqual(["^NSEI", "RELIANCE.NS"]);
   });
 
   it.each(["^NSEI", "^NSEBANK", "^CRSLDX", "^INDIAVIX"])(
@@ -587,7 +710,7 @@ describe("scan JSON endpoint", () => {
       );
 
       expect(response.status).toBe(200);
-      expect(yahooRequests).toEqual([symbol]);
+      expect(yahooRequests).toEqual(symbol === "^NSEI" ? ["^NSEI"] : ["^NSEI", symbol]);
     },
   );
 
@@ -608,7 +731,7 @@ describe("scan JSON endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(yahooRequests).toEqual(["RELIANCE.NS"]);
+    expect(yahooRequests).toEqual(["^NSEI", "RELIANCE.NS"]);
     await expect(response.json()).resolves.toMatchObject({ results: [{ symbol: "RELIANCE" }] });
   });
 

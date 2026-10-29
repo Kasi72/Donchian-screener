@@ -21,11 +21,19 @@ export type CandleStatus =
 
 export type AdjustmentMode = "RAW" | "BACK_ADJUSTED";
 
+export interface CandleProvenance {
+  providerId: string;
+  /** SHA-256 of the normalized, completed candle snapshot. */
+  snapshotHash: string;
+  consensus: "AGREED" | "DIVERGED" | "SINGLE_SOURCE" | "UNAVAILABLE";
+}
+
 export interface CandleResponse {
   status: CandleStatus;
   candles: Candle[];
   asOf: number;
   adjustmentMode: AdjustmentMode;
+  provenance?: CandleProvenance;
 }
 
 export interface MarketDataProvider {

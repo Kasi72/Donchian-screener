@@ -5,14 +5,24 @@ import {
   PIVOT_LEFT_BARS,
   PIVOT_RIGHT_BARS,
 } from "./strategy-config";
+import { priceToTicks } from "./ticks";
 
 export interface TradeLevels {
   entry: number;
   stop: number;
   target1: number;
   target2: number;
-  reactionHigh: number;
-  rewardRisk: number;
+  reactionHigh: number | null;
+  rewardRisk: number | null;
+  hasTarget1Room?: boolean;
+  /** Exchange-tick-safe risk and execution metrics for the trader summary. */
+  riskPerShare?: number;
+  riskPercent?: number;
+  target1RewardRisk?: number;
+  target2RewardRisk?: number;
+  stopBuffer?: number;
+  stopBufferAtr?: number;
+  tickSize?: number;
 }
 
 function assertInputs(
@@ -122,17 +132,17 @@ export function calculateTradeLevels(
     anchorIndex,
   );
 
-  if (rawReactionHigh === undefined) {
-    return null;
-  }
-  const reactionHighTicks = floorTicks(rawReactionHigh, tickSize);
-  if (reactionHighTicks < target1Ticks) return null;
+  const reactionHighTicks = rawReactionHigh === undefined
+    ? null
+    : floorTicks(rawReactionHigh, tickSize);
 
   const entry = priceAtTicks(entryTicks, tickSize);
   const stop = priceAtTicks(stopTicks, tickSize);
   const target1 = priceAtTicks(target1Ticks, tickSize);
   const target2 = priceAtTicks(target2Ticks, tickSize);
-  const reactionHigh = priceAtTicks(reactionHighTicks, tickSize);
+  const reactionHigh = reactionHighTicks === null
+    ? null
+    : priceAtTicks(reactionHighTicks, tickSize);
 
   return {
     entry,
@@ -140,6 +150,14 @@ export function calculateTradeLevels(
     target1,
     target2,
     reactionHigh,
-    rewardRisk: (reactionHighTicks - entryTicks) / riskTicks,
+    rewardRisk: reactionHighTicks === null ? null : (reactionHighTicks - entryTicks) / riskTicks,
+    hasTarget1Room: reactionHighTicks !== null && reactionHighTicks >= target1Ticks,
+    riskPerShare: priceAtTicks(riskTicks, tickSize),
+    riskPercent: (riskTicks * tickSize / Math.max(entryTicks * tickSize, tickSize)) * 100,
+    target1RewardRisk: 1,
+    target2RewardRisk: 2,
+    stopBuffer: priceAtTicks(priceToTicks(signal.low, tickSize) - stopTicks, tickSize),
+    stopBufferAtr: ((priceToTicks(signal.low, tickSize) - stopTicks) * tickSize) / Math.max(atr, tickSize),
+    tickSize,
   };
 }

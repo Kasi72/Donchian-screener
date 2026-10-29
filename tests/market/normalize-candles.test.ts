@@ -109,6 +109,31 @@ describe("normalizeCandles", () => {
     });
   });
 
+  it("ignores a newer Yahoo partial snapshot when older completed candles are valid", () => {
+    const now = new Date(`2026-08-14T12:00:00${IST}`);
+    const completed = candle(`2026-08-12T09:15:00${IST}`);
+    const partialLatest = candle(`2026-08-13T09:15:00${IST}`, { close: null, volume: 9_704_703 });
+
+    const result = normalizeCandles([completed, partialLatest], "1d", now);
+
+    expect(result.status).toBe("INSUFFICIENT_HISTORY");
+    expect(result.candles).toHaveLength(1);
+    expect(result.candles[0].time).toBe(completed.date.getTime());
+  });
+
+  it("does not let a malformed latest intraday snapshot hide a stale completed feed", () => {
+    const result = normalizeCandles(
+      [
+        candle(`2026-08-06T15:25:00${IST}`),
+        candle(`2026-08-07T15:25:00${IST}`, { close: null }),
+      ],
+      "5m",
+      new Date(`2026-08-07T16:00:00${IST}`),
+    );
+
+    expect(result.status).toBe("STALE_DATA");
+  });
+
   it("reports invalid candles for a nonempty feed with only unparseable timestamps", () => {
     const now = new Date(`2026-08-10T12:00:00${IST}`);
 
@@ -200,6 +225,28 @@ describe("normalizeCandles", () => {
     expect(result.candles).toEqual([
       expect.objectContaining({ time: valid.date.getTime() }),
     ]);
+  });
+
+  it("retains a zero-volume flat candle when it belongs to a valid completed session", () => {
+    const quiet = candle(`2026-08-07T10:00:00${IST}`, {
+      open: 318.35,
+      high: 318.35,
+      low: 318.35,
+      close: 318.35,
+      volume: 0,
+    });
+    const result = normalizeCandles([quiet], "5m", new Date(`2026-08-07T10:05:00${IST}`));
+    expect(result.candles).toEqual([expect.objectContaining({ time: quiet.date.getTime(), volume: 0 })]);
+  });
+
+  it.each(["open", "high", "low"])("rejects a completed candle whose %s is zero", (field) => {
+    const result = normalizeCandles(
+      [candle(`2026-08-07T09:15:00${IST}`, { [field]: 0 })],
+      "1d",
+      new Date(`2026-08-07T16:00:00${IST}`),
+    );
+    expect(result.status).toBe("INVALID_CANDLES");
+    expect(result.candles).toHaveLength(0);
   });
 
   it("drops Yahoo zero-volume flat live snapshots outside the hourly grid", () => {
